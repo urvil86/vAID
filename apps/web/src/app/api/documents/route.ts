@@ -48,11 +48,23 @@ export async function POST(request: Request) {
   if (ctx instanceof Response) return ctx;
 
   const body = await request.json();
-  const { patientId, visitId, type, fileRef, ocrText } = body;
+  const { visitId, type, fileRef, ocrText } = body;
+  let { patientId } = body;
 
-  if (!patientId || !fileRef) {
-    return Response.json({ error: 'patientId and fileRef are required' }, { status: 400 });
+  if (!fileRef) {
+    return Response.json({ error: 'fileRef is required' }, { status: 400 });
   }
+
+  // A patient uploading from the review screen only knows the visit — derive
+  // the patient from it so the client never has to plumb a patient_id through.
+  if (!patientId && visitId) {
+    const [v] = await sql`SELECT patient_id FROM visits WHERE id = ${visitId} LIMIT 1`;
+    patientId = v?.patient_id ?? null;
+  }
+  if (!patientId) {
+    return Response.json({ error: 'patientId or a valid visitId is required' }, { status: 400 });
+  }
+
   // Must be able to access the linked visit (if any) and the patient.
   if (visitId && !(await canAccessVisit(ctx, visitId))) return forbidden();
   if (!canAccessPatientDocs(ctx, patientId)) return forbidden();

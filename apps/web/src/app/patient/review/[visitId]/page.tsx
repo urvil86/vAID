@@ -5,10 +5,11 @@ import PatientLayout from '@/components/PatientLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Camera } from 'lucide-react';
 import { StructuredNote } from '@/lib/types';
 import { useState, useEffect, useRef } from 'react';
 import { getStrings, LANG_STORAGE_KEY } from '@/lib/i18n';
+import { fileToCompactDataUrl } from '@/lib/image';
 
 type ReviewForm = {
   chief_complaint: string;
@@ -25,7 +26,10 @@ export default function PatientReviewPage() {
   const [language, setLanguage] = useState('Hindi');
   const [form, setForm] = useState<ReviewForm | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploads, setUploads] = useState<string[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const triggered = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const lang = localStorage.getItem(LANG_STORAGE_KEY);
@@ -109,6 +113,28 @@ export default function PatientReviewPage() {
     router.push('/patient/success');
   };
 
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDoc(true);
+    try {
+      const dataUrl = await fileToCompactDataUrl(file);
+      // Server derives the patient from the visit; the doc shows in the clinic
+      // console's Documents tab for this visit.
+      await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitId, type: 'patient_upload', fileRef: dataUrl }),
+      });
+      setUploads((u) => [...u, dataUrl]);
+    } catch {
+      /* ignore — attaching a report is optional */
+    } finally {
+      setUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   if (isLoading || !finalNote || !form) {
     return (
       <PatientLayout>
@@ -142,6 +168,51 @@ export default function PatientReviewPage() {
           <EditField label={s.severity} value={form.severity} onChange={set('severity')} isHindi={isHindi} multiline />
           <EditField label={s.medications} value={form.medications} onChange={set('medications')} isHindi={isHindi} multiline />
           <EditField label={s.allergies} value={form.allergies} onChange={set('allergies')} isHindi={isHindi} multiline />
+
+          {/* Attach reports (optional) — saved to this visit for the doctor */}
+          <div className="space-y-3 pt-2">
+            <p className="mono-tag text-patient-muted text-[10px]">
+              {isHindi ? 'रिपोर्ट जोड़ें (वैकल्पिक)' : 'ATTACH REPORTS (OPTIONAL)'}
+            </p>
+            {uploads.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {uploads.map((u, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={u}
+                    alt="report"
+                    className="w-full h-24 object-cover rounded-xl border border-patient-border"
+                  />
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingDoc}
+              className="w-full h-14 rounded-2xl border-2 border-dashed border-patient-border text-patient-muted flex items-center justify-center gap-2 hover:border-patient-accent hover:text-patient-accent transition-colors disabled:opacity-60"
+            >
+              {uploadingDoc ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  <span className={isHindi ? 'hindi' : ''}>
+                    {isHindi ? 'रिपोर्ट की फ़ोटो लें या अपलोड करें' : 'Take or upload a report photo'}
+                  </span>
+                </>
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={onPickFile}
+            />
+          </div>
         </div>
 
         <div className="pt-4">

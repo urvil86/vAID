@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PatientLayout from '@/components/PatientLayout';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText, BadgeCheck, ExternalLink } from 'lucide-react';
 
 type PatientVisit = {
   id: string;
@@ -39,6 +40,16 @@ export default function PatientHistoryPage() {
     enabled: !!patientId,
   });
 
+  const { data: profile } = useQuery<{ abha_id?: string } | null>({
+    queryKey: ['patient-profile', patientId],
+    queryFn: async () => {
+      const res = await fetch('/api/profile');
+      if (!res.ok) return null;
+      return (await res.json()).profile;
+    },
+    enabled: !!patientId,
+  });
+
   if (isPending || (patientId && isLoading)) {
     return (
       <PatientLayout>
@@ -58,6 +69,8 @@ export default function PatientHistoryPage() {
           <p className="mono-tag text-patient-muted mb-1">YOUR VISITS</p>
           <h1 className="text-2xl font-bold text-patient-ink">Visit history</h1>
         </div>
+
+        <AbhaCard initial={profile?.abha_id || ''} />
 
         {list.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 text-patient-muted">
@@ -92,5 +105,68 @@ export default function PatientHistoryPage() {
         )}
       </div>
     </PatientLayout>
+  );
+}
+
+function AbhaCard({ initial }: { initial: string }) {
+  const [abha, setAbha] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Re-seed once the saved profile loads.
+  useEffect(() => {
+    setAbha(initial);
+  }, [initial]);
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ abhaId: abha }),
+      });
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="bg-patient-card border-patient-border mb-5">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <BadgeCheck className="w-4 h-4 text-patient-accent" />
+          <p className="mono-tag text-patient-muted text-[10px]">ABHA HEALTH ID</p>
+        </div>
+        <input
+          value={abha}
+          onChange={(e) => {
+            setAbha(e.target.value);
+            setSaved(false);
+          }}
+          placeholder="14-digit ABHA number or you@abdm"
+          className="w-full rounded-xl border border-patient-border bg-white px-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors"
+        />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Button
+            onClick={save}
+            disabled={saving}
+            className="h-11 px-6 bg-patient-accent hover:bg-patient-accent/90 text-white font-bold rounded-full disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? 'Saved ✓' : 'Save'}
+          </Button>
+          <a
+            href="https://abha.abdm.gov.in/abha/v3/register"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-patient-accent font-semibold inline-flex items-center gap-1 hover:underline"
+          >
+            Don&apos;t have one? Create ABHA <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

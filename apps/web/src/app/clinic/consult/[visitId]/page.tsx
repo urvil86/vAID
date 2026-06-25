@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { StructuredNote, PrescriptionItem } from '@/lib/types';
 import { FORMULARY, FREQUENCIES, DURATIONS, FormularyDrug } from '@/data/formulary';
-import useUpload from '@/utils/useUpload';
+import { fileToCompactDataUrl } from '@/lib/image';
 
 type ConsultTab = 'note' | 'rx' | 'docs';
 
@@ -54,7 +54,7 @@ export default function DoctorConsultPage() {
   const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const [rxSaved, setRxSaved] = useState(false);
   const [patientAge, setPatientAge] = useState<string>('');
-  const [upload, { loading: uploading }] = useUpload();
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Data fetching
@@ -194,21 +194,24 @@ export default function DoctorConsultPage() {
   const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !visit) return;
-    const result = await upload({ file });
-    if ('error' in result) return;
-
-    await fetch('/api/documents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        patientId: visit.patient_id,
-        visitId,
-        type: file.type.startsWith('image/') ? 'image' : 'lab_report',
-        fileRef: result.url,
-      }),
-    });
-    refetchDocs();
-    if (fileRef.current) fileRef.current.value = '';
+    setUploading(true);
+    try {
+      const dataUrl = await fileToCompactDataUrl(file);
+      await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: visit.patient_id,
+          visitId,
+          type: file.type.startsWith('image/') ? 'image' : 'lab_report',
+          fileRef: dataUrl,
+        }),
+      });
+      refetchDocs();
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   if (visitLoading || sessionLoading) {
@@ -726,36 +729,54 @@ export default function DoctorConsultPage() {
               {docs?.documents && docs.documents.length > 0 ? (
                 <div className="space-y-3">
                   <p className="mono-tag text-doctor-muted text-[10px]">Uploaded Documents</p>
-                  {docs.documents.map((doc: Record<string, unknown>) => (
-                    <Card
-                      key={doc.id as string}
-                      className="bg-doctor-raised border-doctor-muted/20"
-                    >
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-doctor-bg rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-doctor-accent" />
+                  {docs.documents.map((doc: Record<string, unknown>) => {
+                    const ref = doc.file_ref as string;
+                    const docType = (doc.type as string) || '';
+                    const isImage =
+                      docType.includes('image') ||
+                      docType.includes('upload') ||
+                      ref?.startsWith('data:image');
+                    return (
+                      <Card
+                        key={doc.id as string}
+                        className="bg-doctor-raised border-doctor-muted/20 overflow-hidden"
+                      >
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-doctor-bg rounded-lg flex items-center justify-center">
+                                <FileText className="w-5 h-5 text-doctor-accent" />
+                              </div>
+                              <div>
+                                <p className="text-doctor-text text-sm font-semibold capitalize">
+                                  {docType.replace('_', ' ') || 'Document'}
+                                </p>
+                                <p className="mono-tag text-[10px] text-doctor-muted">
+                                  {(doc.created_at as string).slice(0, 10)}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-doctor-accent hover:text-doctor-accent/80 text-xs"
+                              onClick={() => window.open(ref, '_blank')}
+                            >
+                              Open
+                            </Button>
                           </div>
-                          <div>
-                            <p className="text-doctor-text text-sm font-semibold capitalize">
-                              {(doc.type as string).replace('_', ' ')}
-                            </p>
-                            <p className="mono-tag text-[10px] text-doctor-muted">
-                              {(doc.created_at as string).slice(0, 10)}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-doctor-accent hover:text-doctor-accent/80 text-xs"
-                          onClick={() => window.open(doc.file_ref as string, '_blank')}
-                        >
-                          View
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          {isImage && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={ref}
+                              alt="patient document"
+                              className="w-full max-h-72 object-contain rounded-lg border border-doctor-muted/20 bg-doctor-bg"
+                            />
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <Card className="bg-doctor-raised border-doctor-muted/20">
