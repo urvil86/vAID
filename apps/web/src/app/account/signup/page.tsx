@@ -12,113 +12,172 @@
  *   Unsafe: replacing <form>, removing preventDefault, bypassing
  *           authClient.signUp.email, changing the callbackUrl redirect.
  */
-"use client";
+'use client';
 
-import { useSearchParams } from "next/navigation";
-import { type FormEvent, Suspense, useState } from "react";
-import { SocialSignInButtons } from "@/components/SocialSignInButtons";
-import { authClient } from "@/lib/auth-client";
+import { useSearchParams } from 'next/navigation';
+import { type FormEvent, Suspense, useState } from 'react';
+import { Stethoscope, Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { SocialSignInButtons } from '@/components/SocialSignInButtons';
+import { authClient } from '@/lib/auth-client';
+
+function friendlyError(message?: string | null): string | null {
+  if (!message) return null;
+  if (/origin/i.test(message))
+    return 'Could not verify this site. Open the app at its main URL and try again.';
+  if (/already exists|exists/i.test(message))
+    return 'An account with this email already exists — try signing in instead.';
+  if (/password/i.test(message)) return 'Password must be at least 8 characters.';
+  return message;
+}
 
 function SignUpForm() {
-	const searchParams = useSearchParams();
-	const callbackUrl = searchParams.get("callbackUrl") || "/";
-	const [email, setEmail] = useState("");
-	const [password, setPassword] = useState("");
-	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-	const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		setLoading(true);
-		setError(null);
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-		// The server backfills `name` from the email local-part when it's missing,
-		// so email + password is enough.
-		const { error: signUpError } = await authClient.signUp.email({
-			email,
-			password,
-			name: "",
-		});
+    // The server backfills `name` from the email local-part when it's blank,
+    // so a name is optional but improves how the account shows on records.
+    const { error: signUpError } = await authClient.signUp.email({
+      email,
+      password,
+      name: name.trim(),
+    });
 
-		if (signUpError) {
-			setError(signUpError.message ?? "Sign up failed");
-			setLoading(false);
-			return;
-		}
+    if (signUpError) {
+      setError(signUpError.message ?? 'Sign up failed');
+      setLoading(false);
+      return;
+    }
 
-		if (typeof window !== "undefined") {
-			window.location.href = callbackUrl;
-		} else {
-			console.warn(
-				"signup: window is undefined; cannot redirect to callbackUrl",
-			);
-		}
-	};
+    if (typeof window !== 'undefined') {
+      window.location.href = callbackUrl;
+    } else {
+      console.warn('signup: window is undefined; cannot redirect to callbackUrl');
+    }
+  };
 
-	return (
-		<main className="flex min-h-screen w-full items-center justify-center bg-gray-50 p-[16px]">
-			<form
-				onSubmit={(e) => {
-					void onSubmit(e);
-				}}
-				className="flex w-full max-w-[400px] flex-col gap-[16px] rounded-[12px] bg-white p-[24px] shadow"
-			>
-				<h1 className="text-[24px] font-semibold">Create account</h1>
+  return (
+    <main className="min-h-screen w-full flex items-center justify-center bg-[#f6f1e9] p-4">
+      <div className="w-full max-w-[420px]">
+        <div className="text-center mb-7">
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-patient-accent/10 items-center justify-center mb-3">
+            <Stethoscope className="w-7 h-7 text-patient-accent" />
+          </div>
+          <h1 className="text-3xl font-bold text-patient-ink tracking-tight">V-Aid</h1>
+          <p className="text-patient-muted text-sm mt-1">Smart clinical intake for modern practices.</p>
+        </div>
 
-				<label className="flex flex-col gap-[4px] text-[14px]">
-					Email
-					<input
-						type="email"
-						required
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-						className="rounded-[8px] border border-gray-300 p-[10px] text-[16px] outline-none focus:border-blue-500"
-					/>
-				</label>
+        <form
+          onSubmit={(e) => void onSubmit(e)}
+          className="bg-[#fcfaf5] border border-patient-border rounded-2xl p-6 shadow-sm flex flex-col gap-4"
+        >
+          <div>
+            <h2 className="text-xl font-bold text-patient-ink">Create your account</h2>
+            <p className="text-patient-muted text-sm mt-0.5">Get started with V-Aid</p>
+          </div>
 
-				<label className="flex flex-col gap-[4px] text-[14px]">
-					Password
-					<input
-						type="password"
-						required
-						minLength={8}
-						value={password}
-						onChange={(e) => setPassword(e.target.value)}
-						className="rounded-[8px] border border-gray-300 p-[10px] text-[16px] outline-none focus:border-blue-500"
-					/>
-				</label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-patient-ink">Full name</span>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-patient-muted" />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Dr. Priya Nair"
+                className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors"
+              />
+            </div>
+          </label>
 
-				{error && (
-					<div className="rounded-[8px] bg-red-50 p-[10px] text-[14px] text-red-600">
-						{error}
-					</div>
-				)}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-patient-ink">Email</span>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-patient-muted" />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="doctor@clinic.com"
+                className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors"
+              />
+            </div>
+          </label>
 
-				<button
-					type="submit"
-					disabled={loading}
-					className="rounded-[8px] bg-blue-600 p-[12px] text-[16px] font-medium text-white disabled:opacity-50"
-				>
-					{loading ? "Creating account…" : "Sign Up"}
-				</button>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-patient-ink">Password</span>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-patient-muted" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-10 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-patient-muted hover:text-patient-ink"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </label>
 
-				<SocialSignInButtons callbackUrl={callbackUrl} />
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+              {friendlyError(error)}
+            </div>
+          )}
 
-				<a
-					href={`/account/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-					className="text-center text-[14px] text-blue-600 hover:underline"
-				>
-					Already have an account? Sign in
-				</a>
-			</form>
-		</main>
-	);
+          <button
+            type="submit"
+            disabled={loading}
+            className="h-12 rounded-xl bg-patient-accent hover:bg-patient-accent/90 text-white text-[16px] font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 className="w-5 h-5" /> : 'Create account'}
+          </button>
+
+          <SocialSignInButtons callbackUrl={callbackUrl} />
+
+          <p className="text-center text-sm text-patient-muted">
+            Already have an account?{' '}
+            <a
+              href={`/account/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+              className="font-semibold text-patient-accent hover:underline"
+            >
+              Sign in
+            </a>
+          </p>
+        </form>
+
+        <p className="text-center mono-tag text-patient-muted text-[10px] mt-6">
+          V-AID VERSION 1.0.0 · SECURE HEALTHCARE PLATFORM
+        </p>
+      </div>
+    </main>
+  );
 }
 
 export default function SignUpPage() {
-	return (
-		<Suspense>
-			<SignUpForm />
-		</Suspense>
-	);
+  return (
+    <Suspense>
+      <SignUpForm />
+    </Suspense>
+  );
 }

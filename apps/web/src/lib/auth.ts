@@ -49,6 +49,10 @@ const trustedOrigins = [
     : null,
   process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : null,
   process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  // Wildcard: trust every *.vercel.app URL (production, git-branch, preview,
+  // per-deploy) so login never fails with "Invalid origin" on a Vercel
+  // deployment. Tighten this to your custom domain once you have one.
+  'https://*.vercel.app',
 ].filter((v): v is string => Boolean(v));
 
 // Social providers self-activate when the platform has injected their OAuth
