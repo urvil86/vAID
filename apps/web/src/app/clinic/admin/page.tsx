@@ -6,7 +6,7 @@ import ClinicLayout from '@/components/ClinicLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Save, UserPlus, CheckCircle, Stethoscope } from 'lucide-react';
+import { Loader2, Save, UserPlus, CheckCircle, Stethoscope, GitMerge } from 'lucide-react';
 import { AVAILABLE_LANGUAGES } from '@/lib/i18n';
 
 type Staff = {
@@ -110,6 +110,32 @@ export default function ClinicAdminPage() {
       queryClient.invalidateQueries({ queryKey: ['staff', clinicId] });
     },
     onError: (e: Error) => setStaffError(e.message),
+  });
+
+  // ── Merge duplicate patients ────────────────────────────────────────────
+  const [mergeCanonical, setMergeCanonical] = useState('');
+  const [mergeDuplicate, setMergeDuplicate] = useState('');
+  const [confirmMerge, setConfirmMerge] = useState(false);
+  const [mergeMsg, setMergeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const mergeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/merge-patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canonical: mergeCanonical, duplicate: mergeDuplicate }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Merge failed');
+      return json;
+    },
+    onSuccess: () => {
+      setMergeMsg({ ok: true, text: 'Merged. The duplicate was folded into the kept patient.' });
+      setMergeCanonical('');
+      setMergeDuplicate('');
+      setConfirmMerge(false);
+    },
+    onError: (e: Error) => setMergeMsg({ ok: false, text: e.message }),
   });
 
   if (!clinic) {
@@ -238,6 +264,86 @@ export default function ClinicAdminPage() {
                 Assign role
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Merge duplicate patients */}
+      <Card className="bg-doctor-raised border-doctor-muted/20 mt-6">
+        <CardContent className="p-6 space-y-4">
+          <div>
+            <p className="mono-tag text-doctor-muted text-[10px]">Merge duplicate patients</p>
+            <p className="text-doctor-muted text-xs mt-1">
+              Fold a duplicate account into the one you want to keep — use email or V-Aid ID. This
+              repoints all visits, documents and consent to the kept patient and can&apos;t be undone.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <Field label="Keep this patient (canonical)">
+              <Input
+                className={inputCls}
+                placeholder="email or VAID-000123"
+                value={mergeCanonical}
+                onChange={(e) => {
+                  setMergeCanonical(e.target.value);
+                  setConfirmMerge(false);
+                  setMergeMsg(null);
+                }}
+              />
+            </Field>
+            <Field label="Merge & retire this one (duplicate)">
+              <Input
+                className={inputCls}
+                placeholder="email or VAID-000124"
+                value={mergeDuplicate}
+                onChange={(e) => {
+                  setMergeDuplicate(e.target.value);
+                  setConfirmMerge(false);
+                  setMergeMsg(null);
+                }}
+              />
+            </Field>
+          </div>
+          {mergeMsg && (
+            <p className={`text-sm ${mergeMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+              {mergeMsg.text}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            {!confirmMerge ? (
+              <Button
+                onClick={() => {
+                  setMergeMsg(null);
+                  setConfirmMerge(true);
+                }}
+                disabled={!mergeCanonical || !mergeDuplicate}
+                className="bg-doctor-accent hover:bg-doctor-accent/90 text-doctor-bg font-bold gap-2"
+              >
+                <GitMerge className="w-4 h-4" /> Merge…
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmMerge(false)}
+                  className="text-doctor-muted hover:text-doctor-text"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => mergeMutation.mutate()}
+                  disabled={mergeMutation.isPending}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold gap-2"
+                >
+                  {mergeMutation.isPending ? (
+                    <Loader2 className="w-4 h-4" />
+                  ) : (
+                    <GitMerge className="w-4 h-4" />
+                  )}
+                  Confirm merge
+                </Button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
