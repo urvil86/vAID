@@ -40,6 +40,15 @@ const trustedOrigins = [
   process.env.NEXT_PUBLIC_CREATE_HOST
     ? `https://${process.env.NEXT_PUBLIC_CREATE_HOST}`
     : null,
+  // Vercel auto-injects these (no scheme): the production domain, the git-branch
+  // URL, and the per-deployment URL. Trusting them all means login works on
+  // every URL Vercel serves the app under, not just BETTER_AUTH_URL — otherwise
+  // better-auth rejects them as "Invalid origin".
+  process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : null,
+  process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : null,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
 ].filter((v): v is string => Boolean(v));
 
 // Social providers self-activate when the platform has injected their OAuth
