@@ -39,19 +39,32 @@ export async function PUT(request: Request) {
   if (ctx instanceof Response) return ctx;
 
   const body = await request.json();
-  const abha = typeof body.abhaId === 'string' ? body.abhaId.trim() : null;
+  // Empty ABHA stores as NULL so the cross-clinic unique index ignores it.
+  const abha = (typeof body.abhaId === 'string' ? body.abhaId.trim() : '') || null;
   const dob = body.dateOfBirth || null;
   const sex = body.sex || null;
 
-  const [row] = await sql`
-    INSERT INTO patient_profiles (user_id, abha_id, date_of_birth, sex)
-    VALUES (${ctx.userId}, ${abha}, ${dob}, ${sex})
-    ON CONFLICT (user_id) DO UPDATE SET
-      abha_id       = COALESCE(${abha}, patient_profiles.abha_id),
-      date_of_birth = COALESCE(${dob}, patient_profiles.date_of_birth),
-      sex           = COALESCE(${sex}, patient_profiles.sex)
-    RETURNING user_id, date_of_birth, sex, abha_id
-  `;
-  await audit(request, ctx, 'update', 'patient_profile', ctx.userId);
-  return Response.json({ profile: row });
+  try {
+    const [row] = await sql`
+      INSERT INTO patient_profiles (user_id, abha_id, date_of_birth, sex)
+      VALUES (${ctx.userId}, ${abha}, ${dob}, ${sex})
+      ON CONFLICT (user_id) DO UPDATE SET
+        abha_id       = COALESCE(${abha}, patient_profiles.abha_id),
+        date_of_birth = COALESCE(${dob}, patient_profiles.date_of_birth),
+        sex           = COALESCE(${sex}, patient_profiles.sex)
+      RETURNING user_id, date_of_birth, sex, abha_id
+    `;
+    await audit(request, ctx, 'update', 'patient_profile', ctx.userId);
+    return Response.json({ profile: row });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    if (/unique|duplicate/i.test(msg)) {
+      return Response.json(
+        { error: 'This ABHA is already linked to another account.' },
+        { status: 409 }
+      );
+    }
+    console.error('Error saving profile:', e);
+    return Response.json({ error: 'Failed to save profile' }, { status: 500 });
+  }
 }

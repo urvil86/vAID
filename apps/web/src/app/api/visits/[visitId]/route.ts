@@ -59,9 +59,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ visi
       RETURNING *
     `;
 
-    // When a consult closes, roll up the patient's longitudinal summary.
-    if (status === 'DONE' && visit?.patient_id) {
-      await regeneratePatientSummary(visit.patient_id as string);
+    // When a consult closes: lock the structured note against silent overwrites
+    // and roll up the patient's longitudinal summary.
+    if (status === 'DONE') {
+      await sql`
+        UPDATE intake_sessions
+        SET locked_at = coalesce(locked_at, now())
+        WHERE visit_id = ${visitId}
+      `;
+      if (visit?.patient_id) await regeneratePatientSummary(visit.patient_id as string);
     }
 
     return Response.json(visit);

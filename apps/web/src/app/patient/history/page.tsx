@@ -115,6 +115,7 @@ function AbhaCard({ initial, uhid }: { initial: string; uhid: string }) {
   const [abha, setAbha] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState('');
 
   // Re-seed once the saved profile loads.
   useEffect(() => {
@@ -124,12 +125,18 @@ function AbhaCard({ initial, uhid }: { initial: string; uhid: string }) {
   const save = async () => {
     setSaving(true);
     setSaved(false);
+    setErr('');
     try {
-      await fetch('/api/profile', {
+      const res = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ abhaId: abha }),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(j.error || 'Could not save. Please try again.');
+        return;
+      }
       setSaved(true);
     } finally {
       setSaving(false);
@@ -181,7 +188,8 @@ function AbhaCard({ initial, uhid }: { initial: string; uhid: string }) {
             Don&apos;t have one? Create ABHA <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
-        {!hasAbha && (
+        {err && <p className="text-xs text-red-600">{err}</p>}
+        {!hasAbha && !err && (
           <p className="text-xs text-patient-muted">
             Linking your ABHA keeps all your visits and reports in one place across clinics.
           </p>

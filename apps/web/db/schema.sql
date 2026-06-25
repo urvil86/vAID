@@ -99,6 +99,10 @@ CREATE TABLE IF NOT EXISTS intake_sessions (
   created_at            timestamptz NOT NULL DEFAULT now()
 );
 
+-- Once the consult closes the structured note is locked: later corrections must
+-- be dated addenda, not silent overwrites (medico-legal discipline).
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS locked_at timestamptz;
+
 CREATE TABLE IF NOT EXISTS prescriptions (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   visit_id             uuid NOT NULL,
@@ -135,6 +139,11 @@ CREATE SEQUENCE IF NOT EXISTS vaid_uhid_seq START 1001;
 ALTER TABLE patient_profiles
   ADD COLUMN IF NOT EXISTS uhid text UNIQUE
   DEFAULT ('VAID-' || lpad(nextval('vaid_uhid_seq')::text, 6, '0'));
+
+-- ABHA is a cross-clinic identity key: at most one profile may claim a given
+-- ABHA (NULLs are unconstrained, so patients without one are unaffected).
+CREATE UNIQUE INDEX IF NOT EXISTS patient_profiles_abha_uniq
+  ON patient_profiles (abha_id) WHERE abha_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS doctor_profiles (
   user_id         text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,

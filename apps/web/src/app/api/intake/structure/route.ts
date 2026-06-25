@@ -244,6 +244,15 @@ export async function PUT(request: Request) {
   }
   if (!(await canAccessIntakeSession(ctx, sessionId))) return forbidden();
 
+  // A closed consult locks the note — no silent overwrites after the fact.
+  const [lockRow] = await sql`SELECT locked_at FROM intake_sessions WHERE id = ${sessionId}`;
+  if (lockRow?.locked_at) {
+    return Response.json(
+      { error: 'This note is locked because the consult has closed. Corrections must be added as a dated addendum.' },
+      { status: 409 }
+    );
+  }
+
   try {
     const clean = normalizeNote(note);
     await sql`
