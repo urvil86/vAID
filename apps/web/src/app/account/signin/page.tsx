@@ -14,7 +14,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useState } from 'react';
-import { Stethoscope, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Stethoscope, Mail, Lock, Eye, EyeOff, Loader2, Phone } from 'lucide-react';
 import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { authClient } from '@/lib/auth-client';
 
@@ -132,6 +132,13 @@ function SignInForm() {
           </button>
 
           <SocialSignInButtons callbackUrl={callbackUrl} />
+
+          <a
+            href={`/account/phone?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+            className="h-12 rounded-xl border border-patient-border text-patient-ink text-[16px] font-medium hover:bg-black/[0.03] transition-colors flex items-center justify-center gap-2"
+          >
+            <Phone className="w-4 h-4" /> Continue with phone
+          </a>
 
           <p className="text-center text-sm text-patient-muted">
             No account?{' '}

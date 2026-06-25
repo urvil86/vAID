@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS "verification" (
   "updatedAt"  timestamptz DEFAULT now()
 );
 
+-- phoneNumber plugin: phone-OTP sign-in / identity. Unique phone => one account
+-- per number, which is what dedupes a patient across clinics.
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "phoneNumber" text UNIQUE;
+ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "phoneNumberVerified" boolean DEFAULT false;
+
 -- ───────────────────────── application tables ───────────────────────────────
 CREATE TABLE IF NOT EXISTS clinics (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),

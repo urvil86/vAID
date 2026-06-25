@@ -20,8 +20,9 @@ import { argon2Verify } from 'argon2-wasm-edge';
 import { betterAuth } from 'better-auth';
 import { createAuthMiddleware } from 'better-auth/api';
 import { verifyPassword } from 'better-auth/crypto';
-import { bearer } from 'better-auth/plugins';
+import { bearer, phoneNumber } from 'better-auth/plugins';
 import ws from 'ws';
+import { sendSms } from '@/lib/sms';
 
 neonConfig.webSocketConstructor = ws;
 
@@ -174,7 +175,26 @@ export const auth = betterAuth({
   // Enable Authorization: Bearer <session-token> so mobile apps (which can't
   // carry cookies through a WebView) authenticate API calls with the token
   // returned from /api/auth/token.
-  plugins: [bearer()],
+  //
+  // phoneNumber(): OTP sign-in/up by phone. A unique phone number => one account,
+  // so a patient who uses the same number is the SAME record across clinics
+  // (the real fix for duplicate accounts). sendOTP routes through sendSms()
+  // (Twilio / webhook / dev-console). signUpOnVerification mints the account on
+  // first verify with a placeholder email so phone alone is enough to sign in.
+  plugins: [
+    bearer(),
+    phoneNumber({
+      otpLength: 6,
+      expiresIn: 300,
+      sendOTP: async ({ phoneNumber: to, code }) => {
+        await sendSms(to, `Your V-Aid verification code is ${code}. It expires in 5 minutes.`);
+      },
+      signUpOnVerification: {
+        getTempEmail: (phone) => `${phone.replace(/[^0-9]/g, '')}@phone.vaid.local`,
+        getTempName: (phone) => phone,
+      },
+    }),
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;

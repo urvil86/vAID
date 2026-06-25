@@ -7,7 +7,12 @@
  * routing via trustedOrigins on the server).
  */
 import { createAuthClient } from 'better-auth/react';
+import { phoneNumberClient } from 'better-auth/client/plugins';
 
-export const authClient = createAuthClient();
+// phoneNumberClient adds authClient.phoneNumber.sendOtp/verify + signIn.phoneNumber.
+// Additive only — no baseURL is set (relative paths stay correct).
+export const authClient = createAuthClient({
+  plugins: [phoneNumberClient()],
+});
 
 export const { signIn, signUp, signOut, useSession } = authClient;
