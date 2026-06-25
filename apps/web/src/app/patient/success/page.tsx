@@ -30,7 +30,7 @@ export default function PatientSuccessPage() {
         <p className="text-patient-muted text-base mb-10">{s.successNote}</p>
         <Button
           className={`w-full h-14 bg-patient-accent hover:bg-patient-accent/90 text-white text-lg font-bold rounded-full ${isHindi ? 'hindi' : ''}`}
-          onClick={() => router.push('/')}
+          onClick={() => router.push('/patient/history')}
         >
           {isHindi ? 'संपन्न' : 'Done'}
         </Button>

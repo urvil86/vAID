@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import PatientLayout from '@/components/PatientLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Mic, RotateCcw, Loader2, WifiOff, Keyboard, Sparkles } from 'lucide-react';
+import { Mic, RotateCcw, Loader2, WifiOff, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getStrings, LANG_STORAGE_KEY } from '@/lib/i18n';
@@ -418,11 +418,7 @@ export default function PatientIntakePage() {
             >
               {/* Question (or adaptive follow-up) */}
               <div className="space-y-1.5">
-                {inFollowup ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-patient-accent/50 text-patient-accent mono-tag text-[10px]">
-                    <Sparkles className="w-3 h-3" /> {s.aiFollowupTag}
-                  </span>
-                ) : (
+                {!inFollowup && (
                   <p className="mono-tag text-patient-muted">
                     {s.questionLabel(currentStep + 1, questions.length)}
                   </p>

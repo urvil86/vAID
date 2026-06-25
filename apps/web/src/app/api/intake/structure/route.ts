@@ -232,3 +232,32 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Failed to structure intake' }, { status: 500 });
   }
 }
+
+// PUT /api/intake/structure — save a patient-edited note from the review screen.
+export async function PUT(request: Request) {
+  const ctx = await requireUser(request);
+  if (ctx instanceof Response) return ctx;
+
+  const { sessionId, note } = await request.json();
+  if (!sessionId || !note) {
+    return Response.json({ error: 'sessionId and note are required' }, { status: 400 });
+  }
+  if (!(await canAccessIntakeSession(ctx, sessionId))) return forbidden();
+
+  try {
+    const clean = normalizeNote(note);
+    await sql`
+      UPDATE intake_sessions
+      SET structured_note_json = ${clean},
+          transcript_english = ${clean.history_of_present_illness},
+          screen_flags_json = ${JSON.stringify(clean.screen_flags ?? [])},
+          confidence_flags_json = ${JSON.stringify(clean.confidence_flags ?? [])}
+      WHERE id = ${sessionId}
+    `;
+    await audit(request, ctx, 'update', 'intake', sessionId);
+    return Response.json(clean);
+  } catch (error) {
+    console.error('Error saving edited intake note:', error);
+    return Response.json({ error: 'Failed to save note' }, { status: 500 });
+  }
+}
