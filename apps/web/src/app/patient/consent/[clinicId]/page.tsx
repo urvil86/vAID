@@ -63,6 +63,22 @@ export default function PatientConsentPage() {
             textShown,
           }),
         });
+
+        // Separate consent that lets the treating doctor see this patient's
+        // record from OTHER clinics for this visit. Without it, staff are
+        // limited to their own clinic's visits (DPDP-defensible default).
+        await fetch('/api/consent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientId,
+            visitId: visit.id,
+            scope: 'history_share',
+            version: 'v1',
+            textShown:
+              'I allow my treating doctor at this clinic to view my V-Aid health record from other clinics to help with my care.',
+          }),
+        });
       } catch (e) {
         // Non-blocking: don't trap the patient if the consent log write fails.
         console.warn('[consent] failed to record consent', e);

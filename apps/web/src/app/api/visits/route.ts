@@ -1,6 +1,12 @@
 import { resolveDevPatientId } from '@/lib/dev-auth';
 import sql from '@/app/api/utils/sql';
-import { requireUser, isStaff, assertClinic, forbidden } from '@/lib/auth-guard';
+import {
+  requireUser,
+  isStaff,
+  assertClinic,
+  forbidden,
+  hasHistoryShareConsent,
+} from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { ensurePatientUhid } from '@/lib/patient';
 
@@ -69,6 +75,16 @@ export async function GET(request: Request) {
   try {
     let visits;
     if (patientId) {
+      // The patient sees their own full history. Staff see ONLY their own
+      // clinic's visits for this patient, unless the patient granted an active
+      // cross-clinic history-share consent — then the full record unlocks.
+      const isSelf = ctx.userId === patientId;
+      const fullHistory =
+        ctx.isDevBypass ||
+        isSelf ||
+        (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId)));
+      const clinicFilter = fullHistory ? null : ctx.clinicId;
+
       visits = await sql`
         SELECT v.*, u.name as patient_name,
                c.name as clinic_name,
@@ -82,6 +98,7 @@ export async function GET(request: Request) {
           WHERE visit_id = v.id ORDER BY created_at DESC LIMIT 1
         ) ist ON true
         WHERE v.patient_id = ${patientId}
+          AND (${clinicFilter}::text IS NULL OR v.clinic_id::text = ${clinicFilter})
         ORDER BY v.created_at DESC
       `;
     } else {

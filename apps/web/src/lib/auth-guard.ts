@@ -89,6 +89,23 @@ export function assertClinic(ctx: AuthContext, clinicId: string | null | undefin
   return !!clinicId && ctx.clinicId === clinicId;
 }
 
+/**
+ * Cross-clinic history sharing: true when the patient has granted an active
+ * (non-withdrawn) `history_share` consent. Without it, staff only see visits
+ * from their own clinic — never another clinic's record.
+ */
+export async function hasHistoryShareConsent(patientId: string): Promise<boolean> {
+  if (!patientId) return false;
+  const [c] = await sql`
+    SELECT 1 FROM consent
+    WHERE patient_id = ${patientId}
+      AND scope = 'history_share'
+      AND withdrawn_at IS NULL
+    LIMIT 1
+  `;
+  return !!c;
+}
+
 /** Visit-level access: owning patient, or staff in the same clinic. */
 export async function canAccessVisit(ctx: AuthContext, visitId: string): Promise<boolean> {
   if (ctx.isDevBypass) return true;
