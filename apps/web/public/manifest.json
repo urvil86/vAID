@@ -1,0 +1,42 @@
+{
+  "name": "V-Aid Clinical Intake",
+  "short_name": "V-Aid",
+  "description": "AI-assisted voice intake for outpatient clinics. Fast, structured, multilingual.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0e11",
+  "theme_color": "#0c0e11",
+  "lang": "en-IN",
+  "categories": ["medical", "health"],
+  "icons": [
+    {
+      "src": "https://raw.createusercontent.com/e6024ac6-f96b-47c1-8cb1-6cf80619e3cc/",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://raw.createusercontent.com/e6024ac6-f96b-47c1-8cb1-6cf80619e3cc/",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "label": "Patient Intake",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Queue",
+      "short_name": "Queue",
+      "description": "Open the clinic live queue",
+      "url": "/clinic/queue",
+      "icons": [{ "src": "https://raw.createusercontent.com/e6024ac6-f96b-47c1-8cb1-6cf80619e3cc/", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

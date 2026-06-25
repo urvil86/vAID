@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V-Aid — Offline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Hanken+Grotesk:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0c0e11;
+      color: #e7ecf0;
+      font-family: 'Hanken Grotesk', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+    }
+    .icon {
+      width: 72px;
+      height: 72px;
+      background: #1b222a;
+      border: 1px solid #2a333d;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 2rem;
+    }
+    .icon svg { width: 40px; height: 40px; }
+    .tag {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #6e7884;
+      margin-bottom: 0.75rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: #e7ecf0;
+      margin-bottom: 0.75rem;
+      line-height: 1.2;
+    }
+    p {
+      color: #6e7884;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      max-width: 320px;
+      margin: 0 auto 2.5rem;
+    }
+    .hint {
+      background: #1b222a;
+      border: 1px solid #2a333d;
+      border-radius: 12px;
+      padding: 1rem 1.5rem;
+      font-size: 0.85rem;
+      color: #9aa4ae;
+      max-width: 320px;
+      text-align: left;
+      margin-bottom: 2rem;
+    }
+    .hint strong { color: #56b3c9; font-family: 'Space Mono', monospace; font-size: 0.7rem; display: block; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; }
+    button {
+      background: #56b3c9;
+      color: #0c0e11;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 2rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+    }
+    button:hover { background: #7bc8d8; }
+  </style>
+</head>
+<body>
+  <div class="icon">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 10 L20 30 L32 10" stroke="#56b3c9" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <line x1="12" y1="34" x2="28" y2="34" stroke="#d8693e" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <p class="tag">Connection Lost</p>
+  <h1>You're Offline</h1>
+  <p>V-Aid needs a connection to load this page. Your in-progress intake answers are saved and will sync automatically when you reconnect.</p>
+
+  <div class="hint">
+    <strong>What's saved locally</strong>
+    Any answers you entered during your intake session are stored on your device and will be sent to the clinic once your connection is restored.
+  </div>
+
+  <button onclick="window.location.reload()">Try Again</button>
+
+  <script>
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

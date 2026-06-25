@@ -1,0 +1,170 @@
+-- ============================================================================
+-- V-Aid — canonical database schema (Postgres / Neon-ready)
+--
+-- Apply to a fresh database before first deploy:
+--   psql "$DATABASE_URL" -f apps/web/db/schema.sql
+-- (On Neon, DATABASE_URL is the standard pooled connection string.)
+--
+-- Idempotent: safe to re-run. better-auth columns are camelCase and MUST stay
+-- double-quoted.
+-- ============================================================================
+
+-- ───────────────────────── better-auth core ────────────────────────────────
+CREATE TABLE IF NOT EXISTS "user" (
+  "id"            text PRIMARY KEY,
+  "name"          text NOT NULL,
+  "email"         text NOT NULL UNIQUE,
+  "emailVerified" boolean NOT NULL DEFAULT false,
+  "image"         text,
+  "createdAt"     timestamptz NOT NULL DEFAULT now(),
+  "updatedAt"     timestamptz NOT NULL DEFAULT now(),
+  "role"          text,        -- patient | receptionist | doctor | admin
+  "clinic_id"     text
+);
+
+CREATE TABLE IF NOT EXISTS "session" (
+  "id"        text PRIMARY KEY,
+  "expiresAt" timestamptz NOT NULL,
+  "token"     text NOT NULL UNIQUE,
+  "createdAt" timestamptz NOT NULL DEFAULT now(),
+  "updatedAt" timestamptz NOT NULL DEFAULT now(),
+  "ipAddress" text,
+  "userAgent" text,
+  "userId"    text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "account" (
+  "id"                    text PRIMARY KEY,
+  "accountId"             text NOT NULL,
+  "providerId"            text NOT NULL,
+  "userId"                text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+  "accessToken"           text,
+  "refreshToken"          text,
+  "idToken"               text,
+  "accessTokenExpiresAt"  timestamptz,
+  "refreshTokenExpiresAt" timestamptz,
+  "scope"                 text,
+  "password"              text,
+  "createdAt"             timestamptz NOT NULL DEFAULT now(),
+  "updatedAt"             timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS "verification" (
+  "id"         text PRIMARY KEY,
+  "identifier" text NOT NULL,
+  "value"      text NOT NULL,
+  "expiresAt"  timestamptz NOT NULL,
+  "createdAt"  timestamptz DEFAULT now(),
+  "updatedAt"  timestamptz DEFAULT now()
+);
+
+-- ───────────────────────── application tables ───────────────────────────────
+CREATE TABLE IF NOT EXISTS clinics (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name             text NOT NULL,
+  address          text,
+  branding_json    jsonb,
+  default_language text DEFAULT 'Hindi',
+  rx_header_json   jsonb,
+  created_at       timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS visits (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id          text NOT NULL,
+  doctor_id           text,
+  clinic_id           uuid,
+  token_no            text,
+  status              text NOT NULL DEFAULT 'CHECKED IN',
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  checked_in_at       timestamptz DEFAULT now(),
+  intake_started_at   timestamptz,
+  intake_completed_at timestamptz,
+  consult_started_at  timestamptz,
+  closed_at           timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS intake_sessions (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  visit_id              uuid NOT NULL,
+  language              text,
+  audio_refs_json       jsonb,
+  transcript_native     text,
+  transcript_english    text,
+  structured_note_json  jsonb,
+  confidence_flags_json jsonb,
+  screen_flags_json     jsonb,
+  consent_id            text,
+  status                text NOT NULL DEFAULT 'PENDING',
+  created_at            timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS prescriptions (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  visit_id             uuid NOT NULL,
+  doctor_id            text NOT NULL,
+  items_json           jsonb NOT NULL,
+  advice               text,
+  follow_up_date       date,
+  generated_at         timestamptz NOT NULL DEFAULT now(),
+  shared_channels_json jsonb
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id text NOT NULL,
+  visit_id   uuid,
+  type       text DEFAULT 'lab_report',
+  file_ref   text NOT NULL,
+  ocr_text   text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS patient_profiles (
+  user_id       text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
+  date_of_birth date,
+  sex           text,
+  abha_id       text          -- captured for later ABDM mapping; not linked live
+);
+
+CREATE TABLE IF NOT EXISTS doctor_profiles (
+  user_id         text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
+  registration_no text,
+  specialty       text
+);
+
+-- DPDP consent record
+CREATE TABLE IF NOT EXISTS consent (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id   text,
+  visit_id     uuid,
+  scope        text,
+  version      text,
+  text_shown   text,
+  granted_at   timestamptz NOT NULL DEFAULT now(),
+  withdrawn_at timestamptz
+);
+
+-- DPDP audit trail (every access to a patient record)
+CREATE TABLE IF NOT EXISTS audit_log (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_user_id text,
+  action        text NOT NULL,
+  entity        text,
+  entity_id     text,
+  ip            text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- ───────────────────────── indexes ──────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_visits_clinic    ON visits (clinic_id);
+CREATE INDEX IF NOT EXISTS idx_visits_patient   ON visits (patient_id);
+CREATE INDEX IF NOT EXISTS idx_intake_visit     ON intake_sessions (visit_id);
+CREATE INDEX IF NOT EXISTS idx_rx_visit         ON prescriptions (visit_id);
+CREATE INDEX IF NOT EXISTS idx_docs_visit       ON documents (visit_id);
+CREATE INDEX IF NOT EXISTS idx_docs_patient     ON documents (patient_id);
+CREATE INDEX IF NOT EXISTS idx_consent_patient  ON consent (patient_id);
+CREATE INDEX IF NOT EXISTS idx_consent_visit    ON consent (visit_id);
+CREATE INDEX IF NOT EXISTS idx_audit_actor      ON audit_log (actor_user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity     ON audit_log (entity, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_time       ON audit_log (created_at DESC);
