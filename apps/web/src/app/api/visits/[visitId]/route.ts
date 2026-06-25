@@ -1,6 +1,7 @@
 import sql from '@/app/api/utils/sql';
 import { requireUser, requireStaff, canAccessVisit, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { regeneratePatientSummary } from '@/lib/summary';
 
 export async function GET(request: Request, { params }: { params: Promise<{ visitId: string }> }) {
   const { visitId } = await params;
@@ -57,6 +58,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ visi
       WHERE id = ${visitId}
       RETURNING *
     `;
+
+    // When a consult closes, roll up the patient's longitudinal summary.
+    if (status === 'DONE' && visit?.patient_id) {
+      await regeneratePatientSummary(visit.patient_id as string);
+    }
+
     return Response.json(visit);
   } catch (error) {
     console.error('Error updating visit:', error);

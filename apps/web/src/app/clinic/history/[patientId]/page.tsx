@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, Calendar, FileText, ChevronRight } from 'lucide-react';
 import { StructuredNote } from '@/lib/types';
+import PatientSummaryCard from '@/components/PatientSummaryCard';
 
 const STATUS_COLOR: Record<string, string> = {
   DONE: 'border-l-emerald-500',
@@ -165,6 +166,7 @@ export default function PatientHistoryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          <PatientSummaryCard patientId={patientId} variant="doctor" />
           {visits.map((visit: Record<string, unknown>, i: number) => (
             <VisitCard key={visit.id as string} visit={visit} isFirst={i === 0} />
           ))}

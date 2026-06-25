@@ -142,6 +142,17 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
   specialty       text
 );
 
+-- Rolled-up longitudinal summary, regenerated when a consult closes. Carries
+-- the patient's problems, current medications and allergies forward across
+-- visits so the doctor gets glance-value instead of a stack of cards.
+CREATE TABLE IF NOT EXISTS patient_summary (
+  patient_id       text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
+  problems_json    jsonb,
+  medications_json jsonb,
+  allergies_json   jsonb,
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+
 -- DPDP consent record
 CREATE TABLE IF NOT EXISTS consent (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),

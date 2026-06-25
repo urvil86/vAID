@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, FileText, BadgeCheck, ExternalLink } from 'lucide-react';
+import PatientSummaryCard from '@/components/PatientSummaryCard';
 
 type PatientVisit = {
   id: string;
@@ -71,6 +72,8 @@ export default function PatientHistoryPage() {
         </div>
 
         <AbhaCard initial={profile?.abha_id || ''} uhid={profile?.uhid || ''} />
+
+        {patientId && <PatientSummaryCard patientId={patientId} variant="patient" />}
 
         {list.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 text-patient-muted">
