@@ -15,7 +15,9 @@ export async function GET(request: Request) {
   // record: self, dev, or staff WITH an active history-share consent.
   const isSelf = ctx.userId === patientId;
   const allowed =
-    ctx.isDevBypass || isSelf || (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId)));
+    ctx.isDevBypass ||
+    isSelf ||
+    (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId, ctx.clinicId)));
   if (!allowed) return forbidden();
 
   await audit(request, ctx, 'read', 'patient_summary', patientId);

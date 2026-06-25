@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       const fullHistory =
         ctx.isDevBypass ||
         isSelf ||
-        (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId)));
+        (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId, ctx.clinicId)));
       const clinicFilter = fullHistory ? null : ctx.clinicId;
 
       visits = await sql`

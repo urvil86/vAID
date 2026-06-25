@@ -90,12 +90,30 @@ export function assertClinic(ctx: AuthContext, clinicId: string | null | undefin
 }
 
 /**
- * Cross-clinic history sharing: true when the patient has granted an active
- * (non-withdrawn) `history_share` consent. Without it, staff only see visits
- * from their own clinic — never another clinic's record.
+ * Cross-clinic history sharing: true when the patient granted an active
+ * (non-withdrawn) `history_share` consent. When a clinicId is given, the consent
+ * must have been granted at THAT clinic (i.e. the patient actually checked in
+ * there) — so only a clinic treating the patient unlocks the cross-clinic
+ * record, never an unrelated one. Without it, staff see only their own clinic.
  */
-export async function hasHistoryShareConsent(patientId: string): Promise<boolean> {
+export async function hasHistoryShareConsent(
+  patientId: string,
+  clinicId?: string | null
+): Promise<boolean> {
   if (!patientId) return false;
+  if (clinicId) {
+    const [c] = await sql`
+      SELECT 1
+      FROM consent co
+      JOIN visits v ON co.visit_id = v.id
+      WHERE co.patient_id = ${patientId}
+        AND co.scope = 'history_share'
+        AND co.withdrawn_at IS NULL
+        AND v.clinic_id::text = ${clinicId}
+      LIMIT 1
+    `;
+    return !!c;
+  }
   const [c] = await sql`
     SELECT 1 FROM consent
     WHERE patient_id = ${patientId}
