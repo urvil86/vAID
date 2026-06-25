@@ -127,6 +127,15 @@ CREATE TABLE IF NOT EXISTS patient_profiles (
   abha_id       text          -- captured for later ABDM mapping; not linked live
 );
 
+-- Stable, human-friendly internal patient ID (UHID), minted once per patient
+-- and kept for the platform's own record. ABHA (above) is tied to the same row,
+-- so a patient without ABHA still has a permanent V-Aid ID we can nudge them to
+-- link. The volatile default backfills existing rows on first run.
+CREATE SEQUENCE IF NOT EXISTS vaid_uhid_seq START 1001;
+ALTER TABLE patient_profiles
+  ADD COLUMN IF NOT EXISTS uhid text UNIQUE
+  DEFAULT ('VAID-' || lpad(nextval('vaid_uhid_seq')::text, 6, '0'));
+
 CREATE TABLE IF NOT EXISTS doctor_profiles (
   user_id         text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
   registration_no text,

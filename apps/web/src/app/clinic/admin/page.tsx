@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Save, UserPlus, CheckCircle, Stethoscope } from 'lucide-react';
+import { AVAILABLE_LANGUAGES } from '@/lib/i18n';
 
 type Staff = {
   id: string;
@@ -137,7 +138,19 @@ export default function ClinicAdminPage() {
           <p className="mono-tag text-doctor-muted text-[10px]">Clinic Profile</p>
           <div className="grid md:grid-cols-2 gap-3">
             <Field label="Clinic name"><Input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} /></Field>
-            <Field label="Default language"><Input className={inputCls} value={defaultLanguage} onChange={(e) => setDefaultLanguage(e.target.value)} /></Field>
+            <Field label="Default language">
+              <select
+                value={defaultLanguage}
+                onChange={(e) => setDefaultLanguage(e.target.value)}
+                className="w-full bg-doctor-bg border border-doctor-muted/20 rounded-md text-doctor-text text-sm px-3 py-2"
+              >
+                {AVAILABLE_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label} · {l.nativeLabel}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className="md:col-span-2">
               <Field label="Address"><Input className={inputCls} value={address} onChange={(e) => setAddress(e.target.value)} /></Field>
             </div>

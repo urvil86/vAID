@@ -2,6 +2,7 @@ import { resolveDevPatientId } from '@/lib/dev-auth';
 import sql from '@/app/api/utils/sql';
 import { requireUser, isStaff, assertClinic, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { ensurePatientUhid } from '@/lib/patient';
 
 export async function POST(request: Request) {
   const ctx = await requireUser(request);
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
       VALUES (${patientId}, ${clinicId}, ${tokenNo}, 'CHECKED IN')
       RETURNING *
     `;
+
+    // Every visited patient gets a permanent V-Aid ID (UHID) on first check-in.
+    await ensurePatientUhid(patientId);
 
     return Response.json(visit);
   } catch (error) {

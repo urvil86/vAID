@@ -40,7 +40,7 @@ export default function PatientHistoryPage() {
     enabled: !!patientId,
   });
 
-  const { data: profile } = useQuery<{ abha_id?: string } | null>({
+  const { data: profile } = useQuery<{ abha_id?: string; uhid?: string } | null>({
     queryKey: ['patient-profile', patientId],
     queryFn: async () => {
       const res = await fetch('/api/profile');
@@ -70,7 +70,7 @@ export default function PatientHistoryPage() {
           <h1 className="text-2xl font-bold text-patient-ink">Visit history</h1>
         </div>
 
-        <AbhaCard initial={profile?.abha_id || ''} />
+        <AbhaCard initial={profile?.abha_id || ''} uhid={profile?.uhid || ''} />
 
         {list.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 text-patient-muted">
@@ -108,7 +108,7 @@ export default function PatientHistoryPage() {
   );
 }
 
-function AbhaCard({ initial }: { initial: string }) {
+function AbhaCard({ initial, uhid }: { initial: string; uhid: string }) {
   const [abha, setAbha] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -133,12 +133,24 @@ function AbhaCard({ initial }: { initial: string }) {
     }
   };
 
+  const hasAbha = initial.trim().length > 0;
+
   return (
     <Card className="bg-patient-card border-patient-border mb-5">
       <CardContent className="p-4 space-y-3">
+        {/* Permanent V-Aid patient ID */}
+        <div className="flex items-center justify-between">
+          <p className="mono-tag text-patient-muted text-[10px]">YOUR V-AID ID</p>
+          <p className="mono-tag text-patient-ink text-sm font-bold tracking-wider">
+            {uhid || '—'}
+          </p>
+        </div>
+
+        <div className="h-px bg-patient-border" />
+
         <div className="flex items-center gap-2">
           <BadgeCheck className="w-4 h-4 text-patient-accent" />
-          <p className="mono-tag text-patient-muted text-[10px]">ABHA HEALTH ID</p>
+          <p className="mono-tag text-patient-muted text-[10px]">ABHA HEALTH ID (OPTIONAL)</p>
         </div>
         <input
           value={abha}
@@ -166,6 +178,11 @@ function AbhaCard({ initial }: { initial: string }) {
             Don&apos;t have one? Create ABHA <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
+        {!hasAbha && (
+          <p className="text-xs text-patient-muted">
+            Linking your ABHA keeps all your visits and reports in one place across clinics.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

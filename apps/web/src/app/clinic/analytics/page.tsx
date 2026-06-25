@@ -12,7 +12,8 @@ type Analytics = {
   consultedVisits: number;
   intakeCompletedCount: number;
   intakeCompletionRate: number;
-  avgWaitMin: number | null;
+  avgWaitMin: number | null; // door-to-doctor (check-in → seen)
+  avgIntakeMin: number | null; // time the patient spent filling intake
   avgConsultMin: number | null;
   intakeBeforeRoomPct: number;
   intakeBeforeRoomCount: number;
@@ -84,7 +85,18 @@ export default function ClinicAnalyticsPage() {
           value={`${data.intakeCompletionRate}%`}
           sub={`${data.intakeCompletedCount} completed`}
         />
-        <Metric icon={<Clock className="w-4 h-4" />} label="Avg wait" value={fmtMin(data.avgWaitMin)} />
+        <Metric
+          icon={<Clock className="w-4 h-4" />}
+          label="Door-to-doctor"
+          value={fmtMin(data.avgWaitMin)}
+          sub="check-in → seen"
+        />
+        <Metric
+          icon={<ClipboardCheck className="w-4 h-4" />}
+          label="Avg intake time"
+          value={fmtMin(data.avgIntakeMin)}
+          sub="patient fills form"
+        />
         <Metric
           icon={<Stethoscope className="w-4 h-4" />}
           label="Avg consult"
@@ -94,7 +106,9 @@ export default function ClinicAnalyticsPage() {
       </div>
 
       <p className="text-doctor-muted/70 text-xs mt-6 mono-tag">
-        Wait & consult times populate as visits move through CONSULT → DONE.
+        &ldquo;Door-to-doctor&rdquo; is check-in → seen, so it includes the time the patient
+        spends answering questions, not just queue waiting. Times populate as visits move
+        through CONSULT → DONE.
       </p>
     </ClinicLayout>
   );

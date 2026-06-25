@@ -36,8 +36,13 @@ export async function GET(request: Request) {
         (SELECT count(*) FROM v WHERE consult_started_at IS NOT NULL) AS consulted_visits,
         (SELECT count(*) FROM latest_intake li JOIN v ON v.id = li.visit_id
            WHERE li.status = 'COMPLETED') AS intake_completed,
+        -- Door-to-doctor: check-in → seen. Spans the time the patient spent
+        -- filling intake AND queue time — it is NOT pure waiting.
         (SELECT round(avg(extract(epoch FROM (consult_started_at - created_at)) / 60)::numeric, 1)
            FROM v WHERE consult_started_at IS NOT NULL) AS avg_wait_min,
+        -- Intake time: how long the patient took to answer the questions.
+        (SELECT round(avg(extract(epoch FROM (intake_completed_at - intake_started_at)) / 60)::numeric, 1)
+           FROM v WHERE intake_completed_at IS NOT NULL AND intake_started_at IS NOT NULL) AS avg_intake_min,
         (SELECT round(avg(extract(epoch FROM (closed_at - consult_started_at)) / 60)::numeric, 1)
            FROM v WHERE closed_at IS NOT NULL AND consult_started_at IS NOT NULL) AS avg_consult_min,
         (SELECT count(*) FROM v
@@ -62,7 +67,8 @@ export async function GET(request: Request) {
       consultedVisits: num(row.consulted_visits),
       intakeCompletedCount: num(row.intake_completed),
       intakeCompletionRate, // %
-      avgWaitMin: row.avg_wait_min == null ? null : Number(row.avg_wait_min),
+      avgWaitMin: row.avg_wait_min == null ? null : Number(row.avg_wait_min), // door-to-doctor
+      avgIntakeMin: row.avg_intake_min == null ? null : Number(row.avg_intake_min), // intake-fill time
       avgConsultMin: row.avg_consult_min == null ? null : Number(row.avg_consult_min),
       intakeBeforeRoomPct, // headline proof metric, %
       intakeBeforeRoomCount: num(row.intake_before_room),

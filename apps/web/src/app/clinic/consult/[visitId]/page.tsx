@@ -104,6 +104,16 @@ export default function DoctorConsultPage() {
     enabled: !!visit?.patient_id,
   });
 
+  const { data: patientProfile } = useQuery<{ uhid?: string; abha_id?: string } | null>({
+    queryKey: ['consult-patient-profile', visit?.patient_id],
+    queryFn: async () => {
+      const res = await fetch(`/api/profile?userId=${visit.patient_id}`);
+      if (!res.ok) return null;
+      return (await res.json()).profile;
+    },
+    enabled: !!visit?.patient_id,
+  });
+
   // Populate Rx form when existing prescription loads
   useEffect(() => {
     if (existingRx?.prescription) {
@@ -342,9 +352,23 @@ export default function DoctorConsultPage() {
             <CardContent className="p-6">
               <p className="mono-tag text-doctor-muted text-[10px] mb-3">Patient Profile</p>
               <h2 className="text-2xl font-bold text-doctor-text mb-1">{visit?.patient_name}</h2>
-              <p className="text-doctor-muted text-sm mb-4" suppressHydrationWarning>
+              <p className="text-doctor-muted text-sm mb-2" suppressHydrationWarning>
                 {visit?.sex || 'Not specified'} · {patientAge}
               </p>
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                {patientProfile?.uhid && (
+                  <span className="mono-tag text-[10px] text-doctor-text bg-doctor-bg px-2 py-1 rounded">
+                    {patientProfile.uhid}
+                  </span>
+                )}
+                {patientProfile?.abha_id ? (
+                  <span className="mono-tag text-[10px] text-doctor-accent bg-doctor-accent/10 px-2 py-1 rounded">
+                    ABHA · {patientProfile.abha_id}
+                  </span>
+                ) : (
+                  <span className="mono-tag text-[10px] text-doctor-muted">No ABHA linked</span>
+                )}
+              </div>
 
               <div className="space-y-3 pt-4 border-t border-doctor-muted/10">
                 <div className="bg-doctor-bg p-4 rounded-lg">
