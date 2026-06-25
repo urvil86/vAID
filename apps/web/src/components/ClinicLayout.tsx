@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ListChecks, BarChart3, Settings, Loader2 } from 'lucide-react';
+import { ListChecks, BarChart3, Settings, Loader2, LogOut } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
 const NAV = [
@@ -73,6 +73,17 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
                 </button>
               );
             })}
+            <span className="w-px h-5 bg-doctor-muted/20 mx-1" />
+            <button
+              onClick={async () => {
+                await authClient.signOut();
+                router.push('/account/signin');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-doctor-muted hover:text-doctor-text transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Sign out
+            </button>
           </nav>
         </div>
       </header>
