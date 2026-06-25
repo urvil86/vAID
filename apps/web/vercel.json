@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "corepack enable && yarn workspaces focus web",
+  "buildCommand": "corepack enable && yarn build"
+}
