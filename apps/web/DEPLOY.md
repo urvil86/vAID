@@ -36,9 +36,10 @@ driver speaks Neon's protocol, so the production database must be **Neon**
 | `OPENROUTER_MODEL` | `google/gemini-2.5-flash` |
 
 ### Do NOT set in production
-`NEON_LOCAL_PROXY`, `DEV_AUTH_BYPASS`, `NEXT_PUBLIC_DEV_AUTH_BYPASS`,
-`NEXT_PUBLIC_DISABLE_PWA`. Omitting these gives you **real Neon + enforced auth +
-PWA on**. (`DISABLE_THIRD_PARTY_AI=1` is optional — see the DPDP note.)
+`NEON_LOCAL_PROXY`, `DEV_AUTH_BYPASS`, `NEXT_PUBLIC_DEV_AUTH_BYPASS`. Omitting
+these gives you **real Neon + enforced auth**. The PWA service worker is off by
+default (opt-in via `NEXT_PUBLIC_ENABLE_PWA`). (`DISABLE_THIRD_PARTY_AI=1` is
+optional — see the DPDP note.)
 
 4. Deploy. HTTPS is automatic and **required** (auth cookies are Secure).
 
@@ -71,7 +72,7 @@ psql "<NEON_CONNECTION_STRING>" -c \
 - [x] **Audit log** of patient-record access (done — `audit_log` table)
 - [x] **Erasure on consent withdrawal** + admin subject-erasure (done — DPDP)
 - [ ] **Remove dev flags** — confirm `DEV_AUTH_BYPASS` / `NEXT_PUBLIC_DEV_AUTH_BYPASS`
-      / `NEXT_PUBLIC_DISABLE_PWA` / `NEON_LOCAL_PROXY` are **unset** in prod
+      / `NEON_LOCAL_PROXY` are **unset** in prod
 - [ ] **Rotate secrets** — new `BETTER_AUTH_SECRET`; new `OPENROUTER_API_KEY`
 - [ ] **HTTPS** — verified (Vercel default)
 - [ ] **DB hardening** — Neon TLS + at-rest encryption (default); restrict access

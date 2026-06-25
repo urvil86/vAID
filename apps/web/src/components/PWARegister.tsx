@@ -8,17 +8,20 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-// Testing phase: disable the PWA service worker so the browser never serves a
-// stale cached build. Remove NEXT_PUBLIC_DISABLE_PWA from .env to re-enable it.
-const PWA_DISABLED = process.env.NEXT_PUBLIC_DISABLE_PWA === '1';
+// PWA / service worker is OPT-IN (default off). A proper caching service worker
+// isn't shipped yet, so by default we register nothing and actively tear down
+// any previously-installed worker + caches. Enable later with
+// NEXT_PUBLIC_ENABLE_PWA=1 once a real caching sw.js exists.
+const PWA_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PWA === '1';
 
 export default function PWARegister() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   useEffect(() => {
-    if (PWA_DISABLED) {
-      // Tear down any previously-installed service worker + caches.
+    if (!PWA_ENABLED) {
+      // Tear down any previously-installed service worker + caches. Do NOT
+      // register one (avoids the self-reloading kill-switch loop).
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker
           .getRegistrations()
