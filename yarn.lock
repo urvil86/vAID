@@ -9971,7 +9971,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"date-fns@npm:^4.1.0":
+"date-fns@npm:4.4.0, date-fns@npm:^4.1.0":
   version: 4.4.0
   resolution: "date-fns@npm:4.4.0"
   checksum: 10c0/988f0a13db183f5dfc85c36bbb6847a9c135a9225888bbea4005876ec15539a8613c21a07370a4e7ea543918d5a1cafb423c528b42cdbbde5fdfddb178126b21
@@ -12268,7 +12268,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"framer-motion@npm:^6.5.1":
+"framer-motion@npm:6.5.1, framer-motion@npm:^6.5.1":
   version: 6.5.1
   resolution: "framer-motion@npm:6.5.1"
   dependencies:
@@ -20179,6 +20179,8 @@ __metadata:
     better-auth: "npm:^1.1.7"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
+    date-fns: "npm:4.4.0"
+    framer-motion: "npm:6.5.1"
     jsdom: "npm:^26.1.0"
     lucide-react: "npm:^1.7.0"
     next: "npm:^16.2.6"
