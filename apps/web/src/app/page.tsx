@@ -27,12 +27,13 @@ export default function RootPage() {
   const clinicId = clinics?.[0]?.id || 'temp';
 
   useEffect(() => {
+    // Only staff get sent straight to their console — everyone else (patients,
+    // roleless, signed-out) stays on this landing page so the bare domain
+    // actually shows the main page instead of bouncing to /patient/history.
     if (!isPending && session) {
       const role = (session.user as any).role;
       if (role === 'doctor' || role === 'receptionist' || role === 'admin') {
         router.push('/clinic/queue');
-      } else {
-        router.push('/patient/history');
       }
     }
   }, [session, isPending, router]);

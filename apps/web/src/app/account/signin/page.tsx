@@ -133,12 +133,17 @@ function SignInForm() {
 
           <SocialSignInButtons callbackUrl={callbackUrl} />
 
-          <a
-            href={`/account/phone?callbackUrl=${encodeURIComponent(callbackUrl)}`}
-            className="h-12 rounded-xl border border-patient-border text-patient-ink text-[16px] font-medium hover:bg-black/[0.03] transition-colors flex items-center justify-center gap-2"
+          {/* Phone-OTP is wired but paused until an SMS provider is configured. */}
+          <div
+            aria-disabled="true"
+            title="Phone sign-in is coming soon"
+            className="h-12 rounded-xl border border-patient-border/60 text-patient-muted/50 text-[16px] font-medium flex items-center justify-center gap-2 cursor-not-allowed select-none"
           >
             <Phone className="w-4 h-4" /> Continue with phone
-          </a>
+            <span className="mono-tag text-[9px] border border-patient-border rounded-full px-1.5 py-0.5">
+              SOON
+            </span>
+          </div>
 
           <p className="text-center text-sm text-patient-muted">
             No account?{' '}
