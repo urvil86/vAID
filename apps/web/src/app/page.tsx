@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Stethoscope, User, ClipboardList, Loader2 } from 'lucide-react';
+import { Stethoscope, User, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 // Testing-phase auth bypass — see src/lib/dev-auth.ts. Off when the env var is unset.
 const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1';
 
+const STAFF_ROLES = ['doctor', 'receptionist', 'admin'];
+
 export default function RootPage() {
   const router = useRouter();
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { data: session } = authClient.useSession();
 
   const { data: clinics, isLoading: clinicsLoading } = useQuery({
     queryKey: ['clinics'],
@@ -23,22 +23,19 @@ export default function RootPage() {
     },
   });
 
-  const isPending = sessionPending || clinicsLoading;
   const clinicId = clinics?.[0]?.id || 'temp';
 
-  useEffect(() => {
-    // Only staff get sent straight to their console — everyone else (patients,
-    // roleless, signed-out) stays on this landing page so the bare domain
-    // actually shows the main page instead of bouncing to /patient/history.
-    if (!isPending && session) {
-      const role = (session.user as any).role;
-      if (role === 'doctor' || role === 'receptionist' || role === 'admin') {
-        router.push('/clinic/queue');
-      }
-    }
-  }, [session, isPending, router]);
+  // This page NEVER auto-redirects — the bare domain (vaid.vercel.app) always
+  // shows the landing. Staff reach their console by tapping the card below
+  // (signed-in staff go straight there; everyone else signs in first).
+  const goToClinic = () => {
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    const isStaff = !!role && STAFF_ROLES.includes(role);
+    if (DEV_AUTH_BYPASS || isStaff) router.push('/clinic/queue');
+    else router.push('/account/signin?callbackUrl=/clinic/queue');
+  };
 
-  if (isPending) {
+  if (clinicsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f6f1e9]">
         <Loader2 className="animate-spin text-[#d8693e] w-8 h-8" />
@@ -57,7 +54,7 @@ export default function RootPage() {
         <div className="grid gap-4">
           <Card
             className="bg-[#fcfaf5] border-[#ece4d6] hover:border-[#d8693e] transition-colors cursor-pointer"
-            onClick={() => router.push(DEV_AUTH_BYPASS ? '/clinic/queue' : '/account/signin')}
+            onClick={goToClinic}
           >
             <CardContent className="p-6 flex items-center gap-4">
               <div className="bg-[#d8693e]/10 p-3 rounded-full text-[#d8693e]">
