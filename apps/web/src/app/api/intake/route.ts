@@ -35,6 +35,14 @@ export async function PUT(request: Request) {
   const { sessionId, transcriptNative, status } = await request.json();
   if (!(await canAccessIntakeSession(ctx, sessionId))) return forbidden();
 
+  // Never let an intake COMPLETE with no content (empty/whitespace transcript).
+  if (status === 'COMPLETED' && (!transcriptNative || !String(transcriptNative).trim())) {
+    return Response.json(
+      { error: 'Cannot complete intake with an empty transcript' },
+      { status: 400 }
+    );
+  }
+
   try {
     const [session] = await sql`
       UPDATE intake_sessions

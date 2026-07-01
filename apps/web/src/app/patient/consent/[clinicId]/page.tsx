@@ -14,6 +14,7 @@ export default function PatientConsentPage() {
   const router = useRouter();
   const clinicId = params.clinicId as string;
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState('Hindi');
   const { data: session } = authClient.useSession();
   // Generate token number once on mount to avoid hydration mismatch
@@ -32,6 +33,7 @@ export default function PatientConsentPage() {
 
   const handleConsent = async () => {
     setLoading(true);
+    setError(null);
     try {
       const patientId = session?.user?.id ?? 'temp-patient';
       const tokenNo = tokenRef.current || 'V-001';
@@ -47,46 +49,47 @@ export default function PatientConsentPage() {
       if (!res.ok) throw new Error('Failed to create visit');
       const visit = await res.json();
 
-      // DPDP: record the consent with the exact text shown, before intake.
-      try {
-        const textShown = [s.consentHeading, s.consentBody1, s.consentBody2, s.consentBody3].join(
-          '\n'
-        );
-        await fetch('/api/consent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            patientId,
-            visitId: visit.id,
-            scope: 'voice_health_intake',
-            version: 'v1',
-            textShown,
-          }),
-        });
+      // DPDP: recording consent is BLOCKING — intake must never begin without a
+      // consent record. If this write fails, we do NOT proceed to intake.
+      const textShown = [s.consentHeading, s.consentBody1, s.consentBody2, s.consentBody3].join(
+        '\n'
+      );
+      const cRes = await fetch('/api/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId,
+          visitId: visit.id,
+          scope: 'voice_health_intake',
+          version: 'v1',
+          textShown,
+        }),
+      });
+      if (!cRes.ok) throw new Error('Failed to record consent');
 
-        // Separate consent that lets the treating doctor see this patient's
-        // record from OTHER clinics for this visit. Without it, staff are
-        // limited to their own clinic's visits (DPDP-defensible default).
-        await fetch('/api/consent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            patientId,
-            visitId: visit.id,
-            scope: 'history_share',
-            version: 'v1',
-            textShown:
-              'I allow my treating doctor at this clinic to view my V-Aid health record from other clinics to help with my care.',
-          }),
-        });
-      } catch (e) {
-        // Non-blocking: don't trap the patient if the consent log write fails.
-        console.warn('[consent] failed to record consent', e);
-      }
+      // Secondary cross-clinic history-share consent — best-effort (its absence
+      // only narrows what staff can see; it never blocks intake).
+      fetch('/api/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId,
+          visitId: visit.id,
+          scope: 'history_share',
+          version: 'v1',
+          textShown:
+            'I allow my treating doctor at this clinic to view my V-Aid health record from other clinics to help with my care.',
+        }),
+      }).catch((e) => console.warn('[consent] history_share write failed', e));
 
       router.push(`/patient/intake/${visit.id}`);
     } catch (error) {
       console.error(error);
+      setError(
+        isHindi
+          ? 'सहमति दर्ज नहीं हो सकी। कृपया फिर से प्रयास करें।'
+          : 'We could not record your consent. Please try again.'
+      );
       setLoading(false);
     }
   };
@@ -123,6 +126,11 @@ export default function PatientConsentPage() {
         </Card>
 
         <div className="space-y-3">
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700 text-center">
+              {error}
+            </div>
+          )}
           <Button
             className="w-full h-14 bg-patient-accent hover:bg-patient-accent/90 text-white text-lg font-bold rounded-full"
             onClick={handleConsent}

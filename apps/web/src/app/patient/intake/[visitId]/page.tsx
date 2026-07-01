@@ -257,6 +257,19 @@ export default function PatientIntakePage() {
 
   // ── Advance / submit (shared by both phases) ──────────────────────────────
   const proceed = async (workingAnswers: Record<number, string>) => {
+    // Best-effort partial autosave to the server so intake survives a lost tab /
+    // cleared localStorage. The FINAL submit (below) is blocking + surfaces errors.
+    if (sessionId && isOnline) {
+      const partial = questions
+        .map((q, i) => `${q.text}\n${workingAnswers[i] || '(no answer)'}`)
+        .join('\n\n');
+      fetch('/api/intake', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, transcriptNative: partial, status: 'IN_PROGRESS' }),
+      }).catch(() => {});
+    }
+
     if (currentStep < questions.length - 1) {
       setCurrentStep((p) => p + 1);
       return;
@@ -324,6 +337,18 @@ export default function PatientIntakePage() {
     setCurrentTranscript('');
     finalTranscriptRef.current = '';
 
+    // Require an answer or an explicit skip on the MAIN question (Phase A) — an
+    // empty answer is never silently accepted.
+    if (!inFollowup && !mainAnswer.trim()) {
+      setSaveError(
+        isHindi
+          ? 'कृपया उत्तर दें, या "बताना नहीं चाहते" चुनें।'
+          : 'Please answer, or tap "Prefer not to say".'
+      );
+      return;
+    }
+    setSaveError('');
+
     // Phase B: a follow-up was showing — fold its answer into the step, advance.
     if (inFollowup) {
       const combined = followupAns
@@ -343,28 +368,63 @@ export default function PatientIntakePage() {
 
     if (isOnline && mainAnswer && !followupAsked[currentStep]) {
       setFollowupLoading(true);
-      try {
-        const r = await fetch('/api/intake/followup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ language, question: question.text, answer: mainAnswer }),
-        });
-        if (r.ok) {
-          const j = await r.json();
-          setFollowupAsked((prev) => ({ ...prev, [currentStep]: true }));
-          if (j.followup) {
-            setFollowupQuestion(j.followup);
-            setFollowupInput('');
-            setFollowupLoading(false);
-            return; // stay on this step to collect the follow-up answer
+      // One automatic retry with a short backoff; on final failure we proceed
+      // WITHOUT a follow-up rather than silently hanging or losing the answer.
+      const askFollowup = async (attempt = 0): Promise<Response | null> => {
+        try {
+          const r = await fetch('/api/intake/followup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language, question: question.text, answer: mainAnswer }),
+          });
+          if (r.ok) return r;
+          throw new Error(`status ${r.status}`);
+        } catch {
+          if (attempt < 1) {
+            await new Promise((res) => setTimeout(res, 400));
+            return askFollowup(attempt + 1);
           }
+          return null;
         }
-      } catch {
-        /* fail open — just advance */
+      };
+      const r = await askFollowup();
+      if (r) {
+        const j = await r.json();
+        setFollowupAsked((prev) => ({ ...prev, [currentStep]: true }));
+        if (j.followup) {
+          setFollowupQuestion(j.followup);
+          setFollowupInput('');
+          setFollowupLoading(false);
+          return; // stay on this step to collect the follow-up answer
+        }
+      } else {
+        // Final failure — proceed without a follow-up (logged for analytics).
+        console.warn('[Intake] follow-up generation failed after retry; proceeding');
       }
       setFollowupLoading(false);
     }
 
+    await proceed(stepAnswers);
+  };
+
+  // Explicit skip — records a deliberate "Prefer not to say", never blank data.
+  const skipAnswer = async () => {
+    if (isRecording) stopRecording();
+    setTypedAnswer('');
+    setCurrentTranscript('');
+    finalTranscriptRef.current = '';
+    setSaveError('');
+    if (inFollowup) {
+      const updated = { ...answers, [currentStep]: (answers[currentStep] || '').trim() };
+      setAnswers(updated);
+      setFollowupQuestion(null);
+      setFollowupInput('');
+      await proceed(updated);
+      return;
+    }
+    const skipVal = isHindi ? 'बताना नहीं चाहते' : 'Prefer not to say';
+    const stepAnswers = { ...answers, [currentStep]: skipVal };
+    setAnswers(stepAnswers);
     await proceed(stepAnswers);
   };
 
@@ -582,6 +642,16 @@ export default function PatientIntakePage() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Explicit skip so an empty answer is a recorded choice, not missing data */}
+          {!busy && !inFollowup && !followupLoading && (
+            <button
+              onClick={() => void skipAnswer()}
+              className={`w-full text-center text-sm text-patient-muted underline mt-3 ${isHindi ? 'hindi' : ''}`}
+            >
+              {isHindi ? 'बताना नहीं चाहते' : 'Prefer not to say'}
+            </button>
+          )}
         </div>
       </div>
 
