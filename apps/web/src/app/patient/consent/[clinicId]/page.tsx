@@ -109,6 +109,12 @@ export default function PatientConsentPage() {
             <p>{s.consentBody1}</p>
             <p>{s.consentBody2}</p>
             <p>{s.consentBody3}</p>
+            {process.env.NEXT_PUBLIC_SARVAM_ENABLED === '1' && (
+              <p className="text-patient-muted text-base">
+                Your voice may be transcribed using a secure speech-to-text service (Sarvam) to
+                prepare your note. The recording is transcribed and then discarded.
+              </p>
+            )}
 
             {/* Always show both language versions for maximum clarity */}
             {isHindi && (
