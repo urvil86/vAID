@@ -81,6 +81,29 @@ export async function PUT(request: Request, { params }: { params: Promise<{ visi
         SET locked_at = coalesce(locked_at, now())
         WHERE visit_id = ${visitId}
       `;
+
+      // Ambient scribe (2.5): hard-delete the consult audio + raw transcript on
+      // close — only the doctor-signed summary (inside the note) survives. Prove
+      // the deletion in the audit log with a byte/chunk count.
+      const [rec] = await sql`
+        SELECT length(coalesce(transcript, '')) AS bytes,
+               jsonb_array_length(coalesce(chunk_refs_json, '[]'::jsonb)) AS chunks
+        FROM consult_recordings WHERE visit_id = ${visitId}
+      `;
+      if (rec) {
+        await sql`DELETE FROM consult_recordings WHERE visit_id = ${visitId}`;
+        await audit(request, ctx, 'CONSULT_RECORDING_PURGED', 'visit', `${visitId}`);
+        console.log(
+          JSON.stringify({
+            level: 'info',
+            msg: 'consult recording purged',
+            visitId,
+            bytes: Number(rec.bytes ?? 0),
+            chunks: Number(rec.chunks ?? 0),
+          })
+        );
+      }
+
       if (visit?.patient_id) await regeneratePatientSummary(visit.patient_id as string);
     }
 

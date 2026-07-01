@@ -26,7 +26,8 @@ export type AuditAction =
   | 'ACCESS_DENIED'
   | 'rx_view'
   | 'NOTE_SIGNED'
-  | 'vitals';
+  | 'vitals'
+  | 'CONSULT_RECORDING_PURGED';
 
 function clientIp(req: Request): string | null {
   const fwd = req.headers.get('x-forwarded-for');

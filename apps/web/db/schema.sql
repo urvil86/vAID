@@ -206,6 +206,22 @@ ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS registry_ref text;
 ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz;
 
+-- Ambient consult scribe (2.5). Recording requires BOTH a patient
+-- 'consult_recording' consent AND this doctor opt-in. Audio + raw transcript
+-- live ONLY in consult_recordings and are hard-deleted on visit close; only the
+-- doctor-signed summary survives (inside the note).
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS consult_recording_optin boolean NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS consult_recordings (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  visit_id        uuid NOT NULL,
+  status          text NOT NULL DEFAULT 'recording',
+  transcript      text,
+  chunk_refs_json jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_consult_recordings_visit ON consult_recordings (visit_id);
+CREATE INDEX IF NOT EXISTS idx_consult_recordings_created ON consult_recordings (created_at);
+
 -- Staff invitations — the grant-only path to a staff role. An admin mints an
 -- invite scoped to their clinic; accepting a valid, unexpired token is the only
 -- way to acquire a staff role (self-signups are always 'patient').
