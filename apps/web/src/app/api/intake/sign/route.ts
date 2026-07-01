@@ -3,6 +3,7 @@ import { requireVerifiedDoctor, canAccessIntakeSession, forbidden } from '@/lib/
 import { audit } from '@/lib/audit';
 import { checkOrigin } from '@/lib/csrf';
 import { writeNoteVersion } from '@/lib/note-lifecycle';
+import { populateClinicalResources } from '@/lib/clinical-resources';
 
 /**
  * POST /api/intake/sign — the doctor signs the note. Sets note_status='signed',
@@ -42,6 +43,20 @@ export async function POST(request: Request) {
   `;
   await writeNoteVersion(sessionId, s.structured_note_json, ctx.userId, 'Signed');
   await audit(request, ctx, 'NOTE_SIGNED', 'intake', sessionId);
+
+  // Sign-time: narrative -> coded FHIR-aligned resources (verified by the doctor).
+  const [v] = await sql`SELECT visit_id FROM intake_sessions WHERE id = ${sessionId}`;
+  if (v?.visit_id) {
+    const [visit] = await sql`SELECT patient_id FROM visits WHERE id = ${v.visit_id}`;
+    if (visit?.patient_id) {
+      await populateClinicalResources(
+        v.visit_id as string,
+        visit.patient_id as string,
+        s.structured_note_json as import('@/lib/types').StructuredNote,
+        ctx.userId
+      );
+    }
+  }
 
   return Response.json({ ok: true, note_status: 'signed', signed_by: ctx.userId });
 }

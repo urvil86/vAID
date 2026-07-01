@@ -239,6 +239,64 @@ CREATE TABLE IF NOT EXISTS invitations (
 );
 CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations (lower(email));
 
+-- ─────────────── FHIR-aligned coded clinical resources (3.1) ────────────────
+-- Field names align to FHIR from day one; full FHIR serialization can come
+-- later. Populated when the doctor SIGNS a note (narrative -> coded data).
+-- structured_note_json stays as the narrative source of truth.
+CREATE TABLE IF NOT EXISTS conditions (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id        text NOT NULL,
+  visit_id          uuid,
+  code_icd10        text,
+  display_text      text NOT NULL,
+  clinical_status   text NOT NULL DEFAULT 'active',   -- active | resolved | inactive
+  onset_date        date,
+  recorded_by       text,
+  recorded_at       timestamptz NOT NULL DEFAULT now(),
+  verified_by_doctor boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_conditions_patient ON conditions (patient_id);
+CREATE INDEX IF NOT EXISTS idx_conditions_icd10 ON conditions (code_icd10);
+
+CREATE TABLE IF NOT EXISTS observations (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id     text NOT NULL,
+  visit_id       uuid,
+  code           text,             -- LOINC where known, else a local code
+  display_text   text,
+  value_quantity numeric,
+  unit           text,
+  effective_at   timestamptz NOT NULL DEFAULT now(),
+  source         text              -- 'vitals' | 'lab' | ...
+);
+CREATE INDEX IF NOT EXISTS idx_observations_patient ON observations (patient_id);
+
+CREATE TABLE IF NOT EXISTS medication_statements (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id  text NOT NULL,
+  visit_id    uuid,
+  drug_name   text NOT NULL,
+  rxnorm_code text,
+  dose        text,
+  frequency   text,
+  status      text NOT NULL DEFAULT 'active',      -- active | stopped
+  source      text NOT NULL DEFAULT 'intake',      -- intake | prescription
+  recorded_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_medstmt_patient ON medication_statements (patient_id);
+
+CREATE TABLE IF NOT EXISTS allergy_intolerances (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  patient_id        text NOT NULL,
+  visit_id          uuid,
+  substance         text NOT NULL,
+  reaction          text,
+  severity          text NOT NULL DEFAULT 'unknown', -- mild | moderate | severe | unknown
+  recorded_at       timestamptz NOT NULL DEFAULT now(),
+  verified_by_doctor boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_allergy_patient ON allergy_intolerances (patient_id);
+
 -- Rolled-up longitudinal summary, regenerated when a consult closes. Carries
 -- the patient's problems, current medications and allergies forward across
 -- visits so the doctor gets glance-value instead of a stack of cards.

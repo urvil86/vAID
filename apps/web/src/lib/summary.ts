@@ -72,6 +72,40 @@ export async function regeneratePatientSummary(patientId: string): Promise<Patie
     }
   }
 
+  // Roll up the coded FHIR-aligned resources (3.1) and merge them with the
+  // note-derived aggregation (backward-compatible for pre-3.1 / unsigned visits).
+  try {
+    const codedMeds = (await sql`
+      SELECT DISTINCT drug_name FROM medication_statements
+      WHERE patient_id = ${patientId} AND status = 'active'
+    `) as Array<{ drug_name: string }>;
+    meds.push(...codedMeds.map((m) => m.drug_name));
+
+    const codedAllergies = (await sql`
+      SELECT DISTINCT substance FROM allergy_intolerances WHERE patient_id = ${patientId}
+    `) as Array<{ substance: string }>;
+    allergies.push(...codedAllergies.map((a) => a.substance));
+
+    const codedConditions = (await sql`
+      SELECT display_text, max(recorded_at) AS last_seen, count(*)::int AS visits
+      FROM conditions
+      WHERE patient_id = ${patientId} AND clinical_status = 'active'
+      GROUP BY display_text
+    `) as Array<{ display_text: string; last_seen: unknown; visits: number }>;
+    for (const c of codedConditions) {
+      const key = c.display_text.toLowerCase();
+      if (!problemMap.has(key)) {
+        problemMap.set(key, {
+          problem: c.display_text,
+          last_seen: c.last_seen instanceof Date ? c.last_seen.toISOString() : String(c.last_seen ?? ''),
+          visits: c.visits,
+        });
+      }
+    }
+  } catch {
+    /* coded tables not migrated yet — fall back to the note aggregation */
+  }
+
   const summary: PatientSummary = {
     problems: [...problemMap.values()],
     medications: dedupeStrings(meds),
