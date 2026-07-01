@@ -190,6 +190,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Fixed-window rate-limit counters (Postgres-backed; see src/lib/rate-limit.ts).
+-- Neon-serverless friendly: no Redis assumed. Expired windows are swept
+-- opportunistically on write.
+CREATE TABLE IF NOT EXISTS rate_limit_counters (
+  key          text NOT NULL,
+  window_start timestamptz NOT NULL,
+  count        integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (key, window_start)
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_window ON rate_limit_counters (window_start);
+
 -- ───────────────────────── indexes ──────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_visits_clinic    ON visits (clinic_id);
 CREATE INDEX IF NOT EXISTS idx_visits_patient   ON visits (patient_id);

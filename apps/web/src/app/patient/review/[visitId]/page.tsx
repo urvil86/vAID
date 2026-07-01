@@ -57,6 +57,10 @@ export default function PatientReviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId }),
       });
+      if (res.status === 429) {
+        throw new Error('Too many attempts. Please wait a moment and try again.');
+      }
+      if (!res.ok) throw new Error('We could not organize your answers. Please try again.');
       return res.json() as Promise<StructuredNote>;
     },
   });
@@ -134,6 +138,33 @@ export default function PatientReviewPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  // Friendly error/wait state (e.g. a 429) instead of spinning forever.
+  if (structureMutation.isError && !finalNote) {
+    return (
+      <PatientLayout>
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-5">
+          <p className={`text-xl font-bold ${isHindi ? 'hindi' : ''}`}>
+            {(structureMutation.error as Error)?.message ||
+              'Something went wrong. Please try again.'}
+          </p>
+          <Button
+            onClick={() => {
+              structureMutation.reset();
+              triggered.current = false;
+              if (session) {
+                triggered.current = true;
+                structureMutation.mutate(session.id);
+              }
+            }}
+            className="h-12 px-6 bg-patient-accent hover:bg-patient-accent/90 text-white font-bold rounded-full"
+          >
+            {isHindi ? 'फिर से कोशिश करें' : 'Try again'}
+          </Button>
+        </div>
+      </PatientLayout>
+    );
+  }
 
   if (isLoading || !finalNote || !form) {
     return (

@@ -1,5 +1,6 @@
 import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { requireUser } from '@/lib/auth-guard';
+import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * Adaptive intake follow-up.
@@ -28,6 +29,27 @@ Use null for "followup" when no follow-up is needed.`;
 export async function POST(request: Request) {
   const ctx = await requireUser(request);
   if (ctx instanceof Response) return ctx;
+
+  // Cap adaptive follow-ups: per patient (20/hr) + per-IP backstop (600/hr;
+  // clinics share one IP). followup carries no visit id, so key on the patient.
+  const ipLimit = await enforceRateLimit(request, {
+    key: `ai:ip:${getClientIp(request)}`,
+    windowMs: 3_600_000,
+    max: 600,
+    route: '/api/intake/followup',
+    keyType: 'ip',
+    actorId: ctx.userId,
+  });
+  if (ipLimit) return ipLimit;
+  const userLimit = await enforceRateLimit(request, {
+    key: `ai:user:${ctx.userId}`,
+    windowMs: 3_600_000,
+    max: 20,
+    route: '/api/intake/followup',
+    keyType: 'user',
+    actorId: ctx.userId,
+  });
+  if (userLimit) return userLimit;
 
   // Data minimisation: with third-party AI disabled, never send the patient's
   // answer to an external model — simply skip the adaptive follow-up.

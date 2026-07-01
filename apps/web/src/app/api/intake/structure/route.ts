@@ -3,6 +3,7 @@ import type { StructuredNote } from '@/lib/types';
 import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { requireUser, canAccessIntakeSession, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 
 // Instruction shared by every LLM-backed structuring path. Written to be
 // multilingual: patients in India answer in Hindi, English, or any other major
@@ -177,6 +178,29 @@ export async function POST(request: Request) {
 
   const { sessionId } = await request.json();
   if (!(await canAccessIntakeSession(ctx, sessionId))) return forbidden();
+
+  // Cap AI structuring: per session (20/hr) is the real per-patient guard; the
+  // per-IP backstop is 600/hr, not 60, because a whole clinic shares one public
+  // IP and would otherwise throttle legitimate patients.
+  const ipLimit = await enforceRateLimit(request, {
+    key: `ai:ip:${getClientIp(request)}`,
+    windowMs: 3_600_000,
+    max: 600,
+    route: '/api/intake/structure',
+    keyType: 'ip',
+    actorId: ctx.userId,
+  });
+  if (ipLimit) return ipLimit;
+  const sessionLimit = await enforceRateLimit(request, {
+    key: `ai:session:${sessionId}`,
+    windowMs: 3_600_000,
+    max: 20,
+    route: '/api/intake/structure',
+    keyType: 'visit',
+    actorId: ctx.userId,
+  });
+  if (sessionLimit) return sessionLimit;
+
   await audit(request, ctx, 'structure', 'intake', sessionId);
 
   try {

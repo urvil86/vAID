@@ -1,6 +1,7 @@
 import { LANGUAGE_STRINGS, getStrings } from '@/lib/i18n';
 import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { requireUser } from '@/lib/auth-guard';
+import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 
 type Q = { text: string; hint: string };
 
@@ -12,6 +13,26 @@ const cache = new Map<string, Q[]>();
 export async function GET(request: Request) {
   const ctx = await requireUser(request);
   if (ctx instanceof Response) return ctx;
+
+  // Per-IP backstop (600/hr; clinics share one IP) + a light per-user cap.
+  const ipLimit = await enforceRateLimit(request, {
+    key: `ai:ip:${getClientIp(request)}`,
+    windowMs: 3_600_000,
+    max: 600,
+    route: '/api/intake/translate-questions',
+    keyType: 'ip',
+    actorId: ctx.userId,
+  });
+  if (ipLimit) return ipLimit;
+  const userLimit = await enforceRateLimit(request, {
+    key: `ai:user:${ctx.userId}`,
+    windowMs: 3_600_000,
+    max: 20,
+    route: '/api/intake/translate-questions',
+    keyType: 'user',
+    actorId: ctx.userId,
+  });
+  if (userLimit) return userLimit;
 
   const { searchParams } = new URL(request.url);
   const language = (searchParams.get('language') || 'English').trim();

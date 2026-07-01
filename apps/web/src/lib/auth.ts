@@ -186,6 +186,9 @@ export const auth = betterAuth({
     phoneNumber({
       otpLength: 6,
       expiresIn: 300,
+      // Lock the code after 5 failed verify attempts (anti-brute-force); the
+      // plugin invalidates it and a re-send is required.
+      allowedAttempts: 5,
       sendOTP: async ({ phoneNumber: to, code }) => {
         await sendSms(to, `Your V-Aid verification code is ${code}. It expires in 5 minutes.`);
       },

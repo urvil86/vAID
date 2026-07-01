@@ -21,7 +21,8 @@ export type AuditAction =
   | 'erase_patient'
   | 'staff_assign'
   | 'clinic_update'
-  | 'merge_patient';
+  | 'merge_patient'
+  | 'RATE_LIMITED';
 
 function clientIp(req: Request): string | null {
   const fwd = req.headers.get('x-forwarded-for');
