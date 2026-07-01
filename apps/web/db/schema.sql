@@ -108,6 +108,37 @@ CREATE TABLE IF NOT EXISTS intake_sessions (
 -- be dated addenda, not silent overwrites (medico-legal discipline).
 ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS locked_at timestamptz;
 
+-- Note lifecycle: the doctor is the author. AI output lands as 'ai_draft';
+-- doctor edits move it to 'doctor_reviewed'; signing makes it 'signed' (and
+-- records who/when). A visit cannot close with an unsigned note.
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS note_status text NOT NULL DEFAULT 'ai_draft';
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS signed_by text;
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS signed_at timestamptz;
+
+-- Full version trail — every save writes a new row; nothing is overwritten.
+-- Rows after signing carry is_addendum=true (dated addenda, not mutations).
+CREATE TABLE IF NOT EXISTS note_versions (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  intake_session_id    uuid NOT NULL,
+  version_no           integer NOT NULL,
+  structured_note_json jsonb,
+  edited_by            text,
+  edited_at            timestamptz NOT NULL DEFAULT now(),
+  change_summary       text,
+  is_addendum          boolean NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_note_versions_session ON note_versions (intake_session_id, version_no);
+
+-- Field-level AI-vs-doctor diffs — the training-signal store (no UI yet).
+CREATE TABLE IF NOT EXISTS note_edits (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  intake_session_id uuid NOT NULL,
+  field             text NOT NULL,
+  ai_value          text,
+  doctor_value      text,
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS prescriptions (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   visit_id             uuid NOT NULL,

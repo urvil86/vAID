@@ -170,6 +170,58 @@ export default function DoctorConsultPage() {
     },
   });
 
+  // ── Note authoring: draft → doctor edit → sign ──────────────────────────
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState<{
+    chief_complaint: string;
+    history_of_present_illness: string;
+    duration: string;
+    severity: string;
+    current_medications: string;
+    allergies: string;
+    past_history: string;
+  } | null>(null);
+  const [confirmedFlags, setConfirmedFlags] = useState<string[]>([]);
+  const [signError, setSignError] = useState<string | null>(null);
+
+  const saveNoteMutation = useMutation({
+    mutationFn: async (updated: StructuredNote) => {
+      const res = await fetch('/api/intake/note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session?.id, note: updated }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          ((await res.json().catch(() => ({}))) as { error?: string }).error || 'Failed to save note'
+        );
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setEditingNote(false);
+      queryClient.invalidateQueries({ queryKey: ['intake-session', visitId] });
+    },
+  });
+
+  const signMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/intake/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session?.id }),
+      });
+      if (!res.ok) {
+        throw new Error(
+          ((await res.json().catch(() => ({}))) as { error?: string }).error || 'Failed to sign'
+        );
+      }
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['intake-session', visitId] }),
+    onError: (e: Error) => setSignError(e.message),
+  });
+
   // Save prescription
   const saveRxMutation = useMutation({
     mutationFn: async () => {
@@ -241,6 +293,47 @@ export default function DoctorConsultPage() {
   const confidenceFlags = note?.confidence_flags ?? [];
   const fieldFlagged = (field: string) =>
     confidenceFlags.some((f) => f.toLowerCase().includes(field.toLowerCase()));
+
+  // Note lifecycle
+  const noteStatus: string = (session?.note_status as string) ?? 'ai_draft';
+  const isSigned = noteStatus === 'signed';
+  const startEditing = () => {
+    setNoteDraft({
+      chief_complaint: note?.chief_complaint || '',
+      history_of_present_illness: note?.history_of_present_illness || '',
+      duration: note?.duration || '',
+      severity: note?.severity || '',
+      current_medications: (note?.current_medications || []).join('\n'),
+      allergies: (note?.allergies || []).join('\n'),
+      past_history: (note?.past_history || []).join('\n'),
+    });
+    setEditingNote(true);
+  };
+  const saveEditing = () => {
+    if (!noteDraft || !note) return;
+    const toList = (s: string) =>
+      s
+        .split('\n')
+        .map((x) => x.trim())
+        .filter(Boolean);
+    saveNoteMutation.mutate({
+      ...note,
+      chief_complaint: noteDraft.chief_complaint.trim(),
+      history_of_present_illness: noteDraft.history_of_present_illness.trim(),
+      duration: noteDraft.duration.trim(),
+      severity: noteDraft.severity.trim(),
+      current_medications: toList(noteDraft.current_medications),
+      allergies: toList(noteDraft.allergies),
+      past_history: toList(noteDraft.past_history),
+    });
+  };
+  // Confidence-flagged fields must be edited or explicitly confirmed before sign.
+  const flaggedFields = [
+    ...new Set(confidenceFlags.map((f) => String(f).split(':')[0].trim()).filter(Boolean)),
+  ];
+  const allFlagsConfirmed = flaggedFields.every((f) => confirmedFlags.includes(f));
+  const canSign = !!note && allFlagsConfirmed && !editingNote;
+
   const pastVisits = (historyVisits || []).filter((v: Record<string, unknown>) => v.id !== visitId);
   const filteredDrugs = FORMULARY.filter(
     (d) =>
@@ -448,6 +541,63 @@ export default function DoctorConsultPage() {
           {activeTab === 'note' && (
             <Card className="bg-doctor-raised border-doctor-muted/20">
               <CardContent className="p-6 space-y-2">
+                {/* Note status + author controls */}
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    {noteStatus === 'ai_draft' && (
+                      <span className="mono-tag text-[10px] px-2 py-1 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        AI DRAFT · NOT REVIEWED
+                      </span>
+                    )}
+                    {noteStatus === 'doctor_reviewed' && (
+                      <span className="mono-tag text-[10px] px-2 py-1 rounded bg-doctor-accent/15 text-doctor-accent border border-doctor-accent/30">
+                        REVIEWED · UNSIGNED
+                      </span>
+                    )}
+                    {isSigned && (
+                      <span className="mono-tag text-[10px] px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        SIGNED
+                      </span>
+                    )}
+                  </div>
+                  {!isSigned &&
+                    viewMode === 'English' &&
+                    (editingNote ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={saveEditing}
+                          disabled={saveNoteMutation.isPending}
+                          className="bg-doctor-accent text-doctor-bg font-bold gap-1"
+                        >
+                          {saveNoteMutation.isPending ? (
+                            <Loader2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          )}
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditingNote(false)}
+                          className="text-doctor-muted"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={startEditing}
+                        className="border-doctor-muted/30 text-doctor-text gap-1"
+                      >
+                        <FileText className="w-3.5 h-3.5" /> Edit note
+                      </Button>
+                    ))}
+                </div>
+
                 {/* Mirror Toggle */}
                 <div className="flex justify-end mb-4">
                   <div className="flex bg-doctor-bg p-1 rounded-lg border border-doctor-muted/20">
@@ -470,6 +620,54 @@ export default function DoctorConsultPage() {
                 {viewMode === 'Native' ? (
                   <div className="hindi text-xl leading-relaxed whitespace-pre-wrap text-doctor-text">
                     {session?.transcript_native || 'Transcription pending...'}
+                  </div>
+                ) : editingNote && noteDraft ? (
+                  <div className="space-y-4">
+                    <EditNoteField
+                      label="Chief Complaint"
+                      value={noteDraft.chief_complaint}
+                      onChange={(v) => setNoteDraft({ ...noteDraft, chief_complaint: v })}
+                    />
+                    <EditNoteField
+                      label="History of Present Illness"
+                      value={noteDraft.history_of_present_illness}
+                      onChange={(v) => setNoteDraft({ ...noteDraft, history_of_present_illness: v })}
+                      multiline
+                    />
+                    <div className="grid grid-cols-2 gap-4">
+                      <EditNoteField
+                        label="Duration"
+                        value={noteDraft.duration}
+                        onChange={(v) => setNoteDraft({ ...noteDraft, duration: v })}
+                      />
+                      <EditNoteField
+                        label="Severity"
+                        value={noteDraft.severity}
+                        onChange={(v) => setNoteDraft({ ...noteDraft, severity: v })}
+                      />
+                    </div>
+                    <EditNoteField
+                      label="Current Medications (one per line)"
+                      value={noteDraft.current_medications}
+                      onChange={(v) => setNoteDraft({ ...noteDraft, current_medications: v })}
+                      multiline
+                    />
+                    <EditNoteField
+                      label="Known Allergies (one per line)"
+                      value={noteDraft.allergies}
+                      onChange={(v) => setNoteDraft({ ...noteDraft, allergies: v })}
+                      multiline
+                    />
+                    <EditNoteField
+                      label="Past Medical History (one per line)"
+                      value={noteDraft.past_history}
+                      onChange={(v) => setNoteDraft({ ...noteDraft, past_history: v })}
+                      multiline
+                    />
+                    <p className="text-[11px] text-doctor-muted">
+                      You are editing the note as the treating doctor. The patient&apos;s transcript
+                      (MIRROR) stays unchanged.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-6">
@@ -814,26 +1012,115 @@ export default function DoctorConsultPage() {
             </div>
           )}
 
-          {/* Bottom Action */}
+          {/* Bottom Action — two-step: Review & Sign, then Close Visit */}
           {!isDone && (
-            <div className="flex justify-end pb-12">
-              <Button
-                onClick={() => markDoneMutation.mutate()}
-                disabled={markDoneMutation.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2"
-              >
-                {markDoneMutation.isPending ? (
-                  <Loader2 className="w-4 h-4" />
+            <div className="pb-12 space-y-3">
+              {!isSigned && flaggedFields.length > 0 && (
+                <div className="bg-doctor-raised border border-amber-500/30 rounded-lg p-4">
+                  <p className="mono-tag text-amber-400 text-[10px] mb-2">
+                    CONFIRM LOW-CONFIDENCE FIELDS BEFORE SIGNING
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {flaggedFields.map((f) => (
+                      <label
+                        key={f}
+                        className="flex items-center gap-2 text-sm text-doctor-text cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={confirmedFlags.includes(f)}
+                          onChange={(e) =>
+                            setConfirmedFlags((prev) =>
+                              e.target.checked ? [...prev, f] : prev.filter((x) => x !== f)
+                            )
+                          }
+                        />
+                        <span className="capitalize">{f.replace(/_/g, ' ')}</span>
+                        <span className="text-doctor-muted text-xs">— checked / corrected</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {signError && <p className="text-sm text-red-400 text-right">{signError}</p>}
+
+              <div className="flex justify-end">
+                {!isSigned ? (
+                  <Button
+                    onClick={() => {
+                      setSignError(null);
+                      signMutation.mutate();
+                    }}
+                    disabled={signMutation.isPending || !canSign}
+                    className="bg-doctor-accent hover:bg-doctor-accent/90 text-doctor-bg font-bold gap-2 disabled:opacity-50"
+                    title={
+                      editingNote
+                        ? 'Save your edits first'
+                        : !canSign
+                          ? 'Confirm the flagged fields first'
+                          : 'Sign the note'
+                    }
+                  >
+                    {signMutation.isPending ? (
+                      <Loader2 className="w-4 h-4" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    Review &amp; Sign Note
+                  </Button>
                 ) : (
-                  <CheckCircle className="w-4 h-4" />
+                  <Button
+                    onClick={() => markDoneMutation.mutate()}
+                    disabled={markDoneMutation.isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2"
+                  >
+                    {markDoneMutation.isPending ? (
+                      <Loader2 className="w-4 h-4" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    Close Visit
+                  </Button>
                 )}
-                Mark Visit Done
-              </Button>
+              </div>
             </div>
           )}
         </div>
       </div>
     </ClinicLayout>
+  );
+}
+
+function EditNoteField({
+  label,
+  value,
+  onChange,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  multiline?: boolean;
+}) {
+  return (
+    <div>
+      <p className="mono-tag text-doctor-muted text-[10px] mb-1.5">{label}</p>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={Math.max(2, value.split('\n').length)}
+          className="w-full bg-doctor-bg border border-doctor-muted/20 rounded-lg px-3 py-2 text-sm text-doctor-text outline-none focus:border-doctor-accent resize-none leading-relaxed"
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-doctor-bg border border-doctor-muted/20 rounded-lg px-3 py-2 text-sm text-doctor-text outline-none focus:border-doctor-accent"
+        />
+      )}
+    </div>
   );
 }
 

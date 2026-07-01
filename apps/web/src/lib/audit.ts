@@ -24,7 +24,8 @@ export type AuditAction =
   | 'merge_patient'
   | 'RATE_LIMITED'
   | 'ACCESS_DENIED'
-  | 'rx_view';
+  | 'rx_view'
+  | 'NOTE_SIGNED';
 
 function clientIp(req: Request): string | null {
   const fwd = req.headers.get('x-forwarded-for');

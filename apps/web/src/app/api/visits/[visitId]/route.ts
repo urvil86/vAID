@@ -42,6 +42,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ visi
 
   const { status } = await request.json();
 
+  // A visit cannot be closed with an unsigned note — the doctor must sign first.
+  if (status === 'DONE') {
+    const [s] = await sql`
+      SELECT note_status FROM intake_sessions
+      WHERE visit_id = ${visitId} ORDER BY created_at DESC LIMIT 1
+    `;
+    if (s && s.note_status !== 'signed') {
+      return Response.json(
+        { error: 'Sign the note before closing the visit.' },
+        { status: 409 }
+      );
+    }
+  }
+
   try {
     // Stamp lifecycle timestamps so the queue + analytics can measure flow:
     // consult_started_at = "patient entered the room" (CONSULT), closed_at =

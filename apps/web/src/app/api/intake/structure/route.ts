@@ -4,6 +4,7 @@ import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { requireUser, canAccessIntakeSession, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
+import { writeNoteVersion } from '@/lib/note-lifecycle';
 
 // Instruction shared by every LLM-backed structuring path. Written to be
 // multilingual: patients in India answer in Hindi, English, or any other major
@@ -246,9 +247,12 @@ export async function POST(request: Request) {
       SET structured_note_json = ${structuredNote},
           transcript_english = ${structuredNote.history_of_present_illness},
           screen_flags_json = ${JSON.stringify(structuredNote.screen_flags ?? [])},
-          confidence_flags_json = ${JSON.stringify(structuredNote.confidence_flags ?? [])}
-      WHERE id = ${sessionId}
+          confidence_flags_json = ${JSON.stringify(structuredNote.confidence_flags ?? [])},
+          note_status = 'ai_draft'
+      WHERE id = ${sessionId} AND signed_at IS NULL
     `;
+    // Version 1 = the AI draft baseline (used for the doctor-edit diff).
+    await writeNoteVersion(sessionId, structuredNote, null, 'AI draft');
 
     return Response.json(structuredNote);
   } catch (error) {
