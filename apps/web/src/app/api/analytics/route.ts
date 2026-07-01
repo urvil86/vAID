@@ -52,6 +52,35 @@ export async function GET(request: Request) {
         (SELECT count(*) FROM v WHERE consult_started_at IS NOT NULL) AS consult_denom
     `;
 
+    // ── Note-quality / drift metrics (learning loop, from note_edits) ────────
+    const editsByField = (await sql`
+      SELECT ne.field, count(*)::int AS edits
+      FROM note_edits ne
+      JOIN intake_sessions ist ON ist.id = ne.intake_session_id
+      JOIN visits v ON v.id = ist.visit_id
+      WHERE v.clinic_id = ${clinicId}
+      GROUP BY ne.field
+      ORDER BY edits DESC
+    `) as Array<{ field: string; edits: number }>;
+    const structuringSourceMix = (await sql`
+      SELECT coalesce(ist.structuring_source, 'unknown') AS source, count(*)::int AS n
+      FROM intake_sessions ist
+      JOIN visits v ON v.id = ist.visit_id
+      WHERE v.clinic_id = ${clinicId} AND ist.structured_note_json IS NOT NULL
+      GROUP BY ist.structuring_source
+    `) as Array<{ source: string; n: number }>;
+    const [signStats] = await sql`
+      SELECT
+        count(*) FILTER (WHERE ist.signed_at IS NOT NULL)::int AS signed,
+        count(*) FILTER (
+          WHERE ist.signed_at IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM note_edits ne WHERE ne.intake_session_id = ist.id)
+        )::int AS signed_no_edits
+      FROM intake_sessions ist
+      JOIN visits v ON v.id = ist.visit_id
+      WHERE v.clinic_id = ${clinicId}
+    `;
+
     const num = (x: unknown) => (x == null ? 0 : Number(x));
     const totalVisits = num(row.total_visits);
     const consultDenom = num(row.consult_denom);
@@ -73,6 +102,13 @@ export async function GET(request: Request) {
       intakeBeforeRoomPct, // headline proof metric, %
       intakeBeforeRoomCount: num(row.intake_before_room),
       intakeBeforeRoomDenom: consultDenom,
+      // Note-quality / drift (learning loop)
+      noteQuality: {
+        editsByField,
+        structuringSourceMix,
+        signedNotes: num(signStats?.signed),
+        signedWithoutEdits: num(signStats?.signed_no_edits),
+      },
     });
   } catch (error) {
     console.error('Error computing analytics:', error);

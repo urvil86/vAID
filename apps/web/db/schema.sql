@@ -108,6 +108,12 @@ CREATE TABLE IF NOT EXISTS intake_sessions (
 -- be dated addenda, not silent overwrites (medico-legal discipline).
 ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS locked_at timestamptz;
 
+-- AI structuring provenance: which tier produced the accepted note
+-- ('openrouter' | 'platform' | 'local') and whether structuring succeeded
+-- ('ok' | 'failed'). Powers the note-quality/drift metrics.
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS structuring_source text;
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS structuring_status text NOT NULL DEFAULT 'ok';
+
 -- Note lifecycle: the doctor is the author. AI output lands as 'ai_draft';
 -- doctor edits move it to 'doctor_reviewed'; signing makes it 'signed' (and
 -- records who/when). A visit cannot close with an unsigned note.

@@ -5,6 +5,8 @@ import { requireUser, canAccessIntakeSession, forbidden } from '@/lib/auth-guard
 import { audit } from '@/lib/audit';
 import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 import { writeNoteVersion } from '@/lib/note-lifecycle';
+import { validateStructuredNote } from '@/lib/validation/structured-note';
+import { applyGrounding } from '@/lib/grounding';
 
 // Instruction shared by every LLM-backed structuring path. Written to be
 // multilingual: patients in India answer in Hindi, English, or any other major
@@ -217,28 +219,54 @@ export async function POST(request: Request) {
     const language: string | undefined = session.language;
 
     // Preference order: OpenRouter (cheap multilingual) → platform → local.
-    // DISABLE_THIRD_PARTY_AI=1 keeps all health data in-house: it skips every
-    // external model and uses only the deterministic local structuring (data
-    // minimisation for DPDP — no transcript leaves your infrastructure).
+    // Each tier's output is VALIDATED against the strict note schema; an invalid
+    // note degrades to the next tier rather than reaching the record. A 25s
+    // budget bounds the external calls; the deterministic local tier is instant.
     const thirdPartyDisabled = process.env.DISABLE_THIRD_PARTY_AI === '1';
     let structuredNote: StructuredNote | null = null;
+    let structuringSource = 'local';
+    const structuringStatus = 'ok';
+
+    const withTimeout = <T>(p: Promise<T>, ms: number) =>
+      Promise.race([
+        p,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('structuring timeout')), ms)),
+      ]);
+
     if (!thirdPartyDisabled) {
-      for (const attempt of [
-        () => structureViaOpenRouter(transcript, language),
-        () => structureViaPlatform(transcript),
-      ]) {
+      const tiers = [
+        ['openrouter', () => structureViaOpenRouter(transcript, language)],
+        ['platform', () => structureViaPlatform(transcript)],
+      ] as const;
+      const deadline = Date.now() + 25_000;
+      for (const [source, attempt] of tiers) {
+        if (Date.now() >= deadline) break;
         try {
-          structuredNote = await attempt();
+          const raw = await withTimeout(attempt(), Math.max(1000, deadline - Date.now()));
+          const v = validateStructuredNote(raw);
+          if (v.ok) {
+            structuredNote = v.note as StructuredNote;
+            structuringSource = source;
+            break;
+          }
+          console.warn(`[structure] ${source} output failed validation: ${v.errors}`);
         } catch (e) {
-          console.warn('[intake/structure] provider failed, trying next:', e);
-          structuredNote = null;
+          console.warn(`[structure] ${source} failed, trying next:`, e);
         }
-        if (structuredNote) break;
       }
     }
+
     if (!structuredNote) {
-      structuredNote = structureLocally(transcript);
+      // Deterministic local fallback — always available, no external call.
+      const local = structureLocally(transcript);
+      const v = validateStructuredNote(local);
+      structuredNote = (v.ok ? v.note : local) as StructuredNote;
+      structuringSource = 'local';
     }
+
+    // Grounding: FLAG (never delete) any medication/allergy not traceable to the
+    // transcript, so the doctor must confirm it before signing (1.4 sign flow).
+    structuredNote = applyGrounding(structuredNote, transcript);
 
     // Persist the typed flag columns too (not just inside the JSON note), so the
     // queue's screen-flag glyph and any flag-driven queries work off real data.
@@ -248,7 +276,9 @@ export async function POST(request: Request) {
           transcript_english = ${structuredNote.history_of_present_illness},
           screen_flags_json = ${JSON.stringify(structuredNote.screen_flags ?? [])},
           confidence_flags_json = ${JSON.stringify(structuredNote.confidence_flags ?? [])},
-          note_status = 'ai_draft'
+          note_status = 'ai_draft',
+          structuring_source = ${structuringSource},
+          structuring_status = ${structuringStatus}
       WHERE id = ${sessionId} AND signed_at IS NULL
     `;
     // Version 1 = the AI draft baseline (used for the doctor-edit diff).
