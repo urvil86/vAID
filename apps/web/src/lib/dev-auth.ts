@@ -1,17 +1,21 @@
 /**
  * Dev-only auth bypass for the testing phase.
  *
- * When DEV_AUTH_BYPASS=1, server routes that would otherwise 401 fall back to a
- * real seeded demo user instead of requiring a logged-in session. A real
- * session always takes precedence, and with the flag off these helpers behave
- * exactly like `auth.api.getSession`, so production behaviour is unchanged.
+ * When DEV_AUTH_BYPASS=1 AND the environment is non-production, server routes
+ * that would otherwise 401 fall back to a real seeded demo user instead of
+ * requiring a logged-in session. A real session always takes precedence.
  *
- * Turn off by removing DEV_AUTH_BYPASS / NEXT_PUBLIC_DEV_AUTH_BYPASS from .env.
+ * The gate is bypassAllowed() (see env-assertions.ts): it returns false in
+ * production regardless of the flag, and the boot assertions throw if the flag
+ * is even present in a production build. So this can NEVER activate in
+ * production. Turn off in dev by removing DEV_AUTH_BYPASS /
+ * NEXT_PUBLIC_DEV_AUTH_BYPASS from .env.
  */
 import sql from '@/app/api/utils/sql';
 import { auth } from '@/lib/auth';
+import { bypassAllowed } from '@/lib/env-assertions';
 
-export const DEV_AUTH_BYPASS = process.env.DEV_AUTH_BYPASS === '1';
+export const DEV_AUTH_BYPASS = bypassAllowed();
 
 type RealSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 

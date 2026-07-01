@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import './global.css';
 import { Providers } from './providers';
 import PWARegister from '@/components/PWARegister';
+import DevBypassBanner from '@/components/DevBypassBanner';
 
 export const viewport: Viewport = {
   themeColor: [
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <Providers>{children}</Providers>
         <PWARegister />
+        <DevBypassBanner />
       </body>
     </html>
   );

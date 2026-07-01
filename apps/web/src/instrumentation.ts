@@ -6,6 +6,11 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Fail loud on a security-critical misconfiguration (e.g. DEV_AUTH_BYPASS
+    // set in a production build) before any request is served.
+    const { assertProductionEnv } = await import('./lib/env-assertions');
+    assertProductionEnv();
+
     const { configureNeonLocalProxy } = await import('./lib/neon-local');
     configureNeonLocalProxy();
   }
