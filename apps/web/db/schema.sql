@@ -187,6 +187,36 @@ CREATE TABLE IF NOT EXISTS doctor_profiles (
   specialty       text
 );
 
+-- Doctor verification + onboarding. A doctor stays 'pending' until an admin
+-- verifies their registration against the issuing council's register; until
+-- then they can view the queue but cannot SIGN notes or issue prescriptions
+-- (enforced in auth-guard). council + signature_name print on the Rx / note.
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS council text;
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS signature_name text;
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS verification_status text NOT NULL DEFAULT 'pending';
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS verified_by text;
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS verified_at timestamptz;
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS registry_ref text;
+ALTER TABLE doctor_profiles ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz;
+
+-- Staff invitations — the grant-only path to a staff role. An admin mints an
+-- invite scoped to their clinic; accepting a valid, unexpired token is the only
+-- way to acquire a staff role (self-signups are always 'patient').
+CREATE TABLE IF NOT EXISTS invitations (
+  token       text PRIMARY KEY,
+  email       text,
+  phone       text,
+  role        text NOT NULL,
+  clinic_id   uuid NOT NULL,
+  invited_by  text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  accepted_at timestamptz,
+  accepted_by text
+);
+CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations (lower(email));
+
 -- Rolled-up longitudinal summary, regenerated when a consult closes. Carries
 -- the patient's problems, current medications and allergies forward across
 -- visits so the doctor gets glance-value instead of a stack of cards.

@@ -82,6 +82,26 @@ export async function requireStaff(req: Request): Promise<AuthContext | Response
   return requireRole(req, STAFF_ROLES);
 }
 
+/**
+ * Require a VERIFIED doctor — used for the actions only a licensed, verified
+ * doctor may take (signing notes, issuing prescriptions). A doctor whose
+ * verification is still 'pending' can view the queue but is blocked here.
+ */
+export async function requireVerifiedDoctor(req: Request): Promise<AuthContext | Response> {
+  const ctx = await requireRole(req, ['doctor']);
+  if (ctx instanceof Response) return ctx;
+  if (ctx.isDevBypass) return ctx;
+  const [row] = await sql`
+    SELECT verification_status FROM doctor_profiles WHERE user_id = ${ctx.userId}
+  `;
+  if (row?.verification_status !== 'verified') {
+    return forbidden(
+      'Your doctor account is pending verification — you cannot sign notes or issue prescriptions yet.'
+    );
+  }
+  return ctx;
+}
+
 /** A staff member may only act within their own clinic. */
 export function assertClinic(ctx: AuthContext, clinicId: string | null | undefined): boolean {
   if (ctx.isDevBypass) return true;

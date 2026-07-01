@@ -1,5 +1,10 @@
 import sql from '@/app/api/utils/sql';
-import { requireUser, requireRole, canAccessVisit, forbidden } from '@/lib/auth-guard';
+import {
+  requireUser,
+  requireVerifiedDoctor,
+  canAccessVisit,
+  forbidden,
+} from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { checkOrigin } from '@/lib/csrf';
 import { parseBody, prescriptionCreateSchema } from '@/lib/validation';
@@ -33,7 +38,7 @@ export async function POST(request: Request) {
   const csrf = checkOrigin(request);
   if (csrf) return csrf;
 
-  const ctx = await requireRole(request, ['doctor']);
+  const ctx = await requireVerifiedDoctor(request);
   if (ctx instanceof Response) return ctx;
 
   const parsed = await parseBody(request, prescriptionCreateSchema);

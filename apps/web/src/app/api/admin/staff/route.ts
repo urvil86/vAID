@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   try {
     const staff = await sql`
       SELECT u.id, u.name, u.email, u.role, u.clinic_id,
-             dp.registration_no, dp.specialty
+             dp.registration_no, dp.specialty, dp.verification_status
       FROM "user" u
       LEFT JOIN doctor_profiles dp ON dp.user_id = u.id
       WHERE u.role IN ('doctor', 'receptionist', 'admin')

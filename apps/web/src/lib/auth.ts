@@ -162,13 +162,19 @@ export const auth = betterAuth({
       // Role drives the post-login redirect (clinic staff → /clinic/queue,
       // patients → /patient/history) and clinic_id scopes staff to a clinic.
       // Declared here so better-auth returns them on the session user object.
+      //
+      // input:false is a SECURITY control — it makes these server-managed only,
+      // so a self-signup CANNOT request role:'doctor'/'admin' or a clinic_id in
+      // the signup body. Staff roles are granted server-side (admin/invite) only.
       role: {
         type: 'string',
         required: false,
+        input: false,
       },
       clinic_id: {
         type: 'string',
         required: false,
+        input: false,
       },
     },
   },

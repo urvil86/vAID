@@ -16,6 +16,7 @@ type Staff = {
   role: string;
   registration_no?: string;
   specialty?: string;
+  verification_status?: string;
 };
 
 export default function ClinicAdminPage() {
@@ -145,6 +146,20 @@ export default function ClinicAdminPage() {
     onError: (e: Error) => setMergeMsg({ ok: false, text: e.message }),
   });
 
+  // Verify a pending doctor (admin checked their registration).
+  const verifyMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch('/api/admin/verify-doctor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error('Failed to verify');
+      return res.json();
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['staff', clinicId] }),
+  });
+
   if (!clinic) {
     return (
       <ClinicLayout>
@@ -231,7 +246,29 @@ export default function ClinicAdminPage() {
                     {m.specialty ? `· ${m.specialty}` : ''}
                   </p>
                 </div>
-                <span className="mono-tag text-[10px] text-doctor-accent uppercase">{m.role}</span>
+                <div className="flex items-center gap-2">
+                  {m.role === 'doctor' &&
+                    (m.verification_status === 'verified' ? (
+                      <span className="mono-tag text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        VERIFIED
+                      </span>
+                    ) : (
+                      <>
+                        <span className="mono-tag text-[10px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          PENDING
+                        </span>
+                        <Button
+                          size="sm"
+                          onClick={() => verifyMutation.mutate(m.id)}
+                          disabled={verifyMutation.isPending}
+                          className="h-7 px-3 bg-doctor-accent hover:bg-doctor-accent/90 text-doctor-bg text-xs font-bold"
+                        >
+                          Verify
+                        </Button>
+                      </>
+                    ))}
+                  <span className="mono-tag text-[10px] text-doctor-accent uppercase">{m.role}</span>
+                </div>
               </div>
             ))}
             {(staffData?.staff ?? []).length === 0 && (
