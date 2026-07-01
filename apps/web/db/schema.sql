@@ -257,6 +257,34 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Vitals — every note can carry objective numbers. All measurements are
+-- nullable (walk-in clinics often lack equipment); DB CHECK constraints reject
+-- impossible values (mirrored in zod). entry_source distinguishes staff-measured
+-- from patient self-reported so they are never silently mixed.
+CREATE TABLE IF NOT EXISTS vitals (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  visit_id      uuid NOT NULL,
+  patient_id    text NOT NULL,
+  recorded_by   text,
+  recorded_at   timestamptz NOT NULL DEFAULT now(),
+  systolic_bp   integer,
+  diastolic_bp  integer,
+  heart_rate    integer,
+  temperature_c numeric(4,1),
+  resp_rate     integer,
+  spo2          integer,
+  weight_kg     numeric(5,1),
+  height_cm     numeric(5,1),
+  glucose_mgdl  integer,
+  entry_source  text NOT NULL DEFAULT 'staff',
+  CONSTRAINT vitals_spo2_range CHECK (spo2 IS NULL OR (spo2 BETWEEN 50 AND 100)),
+  CONSTRAINT vitals_temp_range CHECK (temperature_c IS NULL OR (temperature_c BETWEEN 30 AND 45)),
+  CONSTRAINT vitals_hr_range CHECK (heart_rate IS NULL OR (heart_rate BETWEEN 20 AND 300)),
+  CONSTRAINT vitals_sys_range CHECK (systolic_bp IS NULL OR (systolic_bp BETWEEN 50 AND 300)),
+  CONSTRAINT vitals_dia_range CHECK (diastolic_bp IS NULL OR (diastolic_bp BETWEEN 20 AND 200))
+);
+CREATE INDEX IF NOT EXISTS idx_vitals_visit ON vitals (visit_id);
+
 -- Expiring share links for prescriptions. A random 128-bit token resolves to a
 -- prescription for a limited window (public /rx/[token] view). Raw-UUID
 -- prescription URLs are no longer publicly resolvable.

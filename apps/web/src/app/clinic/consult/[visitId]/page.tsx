@@ -27,6 +27,7 @@ import {
 import { StructuredNote, PrescriptionItem } from '@/lib/types';
 import { FORMULARY, FREQUENCIES, DURATIONS, FormularyDrug } from '@/data/formulary';
 import { fileToCompactDataUrl } from '@/lib/image';
+import VitalsPanel from '@/components/VitalsPanel';
 
 type ConsultTab = 'note' | 'rx' | 'docs';
 
@@ -539,6 +540,8 @@ export default function DoctorConsultPage() {
 
           {/* Tab: Clinical Note */}
           {activeTab === 'note' && (
+            <>
+            <VitalsPanel visitId={visitId} />
             <Card className="bg-doctor-raised border-doctor-muted/20">
               <CardContent className="p-6 space-y-2">
                 {/* Note status + author controls */}
@@ -721,6 +724,7 @@ export default function DoctorConsultPage() {
                 )}
               </CardContent>
             </Card>
+            </>
           )}
 
           {/* Tab: Rx Builder */}
