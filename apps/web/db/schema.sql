@@ -187,6 +187,14 @@ ALTER TABLE patient_profiles
 CREATE UNIQUE INDEX IF NOT EXISTS patient_profiles_abha_uniq
   ON patient_profiles (abha_id) WHERE abha_id IS NOT NULL;
 
+-- ABDM verification (3.3) + family accounts. abha_verified is set once the ABDM
+-- sandbox confirms the number/address. One phone => one account with multiple
+-- patient_profiles (relationship + managed_by point at the primary profile).
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS abha_verified boolean NOT NULL DEFAULT false;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS abha_verified_at timestamptz;
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS relationship text DEFAULT 'self';
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS managed_by text;
+
 CREATE TABLE IF NOT EXISTS doctor_profiles (
   user_id         text PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
   registration_no text,

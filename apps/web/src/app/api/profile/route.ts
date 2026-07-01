@@ -2,6 +2,7 @@ import sql from '@/app/api/utils/sql';
 import { requireUser, isStaff, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { ensurePatientUhid } from '@/lib/patient';
+import { verifyAbha } from '@/lib/abdm';
 
 // GET /api/profile            — the signed-in user's own profile (ABHA, UHID…)
 // GET /api/profile?userId=XXX — a patient's profile, for clinic staff only.
@@ -55,7 +56,19 @@ export async function PUT(request: Request) {
       RETURNING user_id, date_of_birth, sex, abha_id
     `;
     await audit(request, ctx, 'update', 'patient_profile', ctx.userId);
-    return Response.json({ profile: row });
+
+    // ABDM verification at capture time (no-op / unverified until ABDM is wired).
+    let abhaVerified = false;
+    if (abha) {
+      const { verified } = await verifyAbha(abha);
+      abhaVerified = verified;
+      await sql`
+        UPDATE patient_profiles
+        SET abha_verified = ${verified}, abha_verified_at = ${verified ? new Date() : null}
+        WHERE user_id = ${ctx.userId}
+      `;
+    }
+    return Response.json({ profile: { ...row, abha_verified: abhaVerified } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : '';
     if (/unique|duplicate/i.test(msg)) {
