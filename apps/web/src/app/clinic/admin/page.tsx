@@ -25,8 +25,15 @@ export default function ClinicAdminPage() {
     queryKey: ['clinics'],
     queryFn: async () => (await fetch('/api/clinics')).json(),
   });
-  const clinic = clinics?.[0];
-  const clinicId = clinic?.id;
+  const clinicId = clinics?.[0]?.id;
+  // The public list is a minimal DTO; fetch the FULL record (rx header, address)
+  // for the settings form now that we're an authenticated admin.
+  const { data: fullClinic } = useQuery({
+    queryKey: ['clinic-full', clinicId],
+    queryFn: async () => (await fetch(`/api/clinics/${clinicId}`)).json(),
+    enabled: !!clinicId,
+  });
+  const clinic = fullClinic ?? clinics?.[0];
 
   // ── Clinic settings form ────────────────────────────────────────────────
   const [name, setName] = useState('');

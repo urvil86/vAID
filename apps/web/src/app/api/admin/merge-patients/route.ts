@@ -1,8 +1,17 @@
 import sql from '@/app/api/utils/sql';
-import { requireRole } from '@/lib/auth-guard';
+import { requireRole, forbidden } from '@/lib/auth-guard';
 import { mergePatients } from '@/lib/patient';
 import { regeneratePatientSummary } from '@/lib/summary';
 import { audit } from '@/lib/audit';
+import { checkOrigin } from '@/lib/csrf';
+
+/** True if the patient has at least one visit at the given clinic. */
+async function hasVisitAtClinic(patientId: string, clinicId: string): Promise<boolean> {
+  const [row] = await sql`
+    SELECT 1 FROM visits WHERE patient_id = ${patientId} AND clinic_id = ${clinicId} LIMIT 1
+  `;
+  return !!row;
+}
 
 /** Resolve an email, V-Aid ID (VAID-…), or raw user id to a user id. */
 async function resolveUserId(input: string): Promise<string | null> {
@@ -28,6 +37,9 @@ async function resolveUserId(input: string): Promise<string | null> {
  * visits/documents/consent, carries ABHA, rebuilds the summary.
  */
 export async function POST(request: Request) {
+  const csrf = checkOrigin(request);
+  if (csrf) return csrf;
+
   const ctx = await requireRole(request, ['admin']);
   if (ctx instanceof Response) return ctx;
 
@@ -49,6 +61,19 @@ export async function POST(request: Request) {
     return Response.json({ error: `No patient found for "${duplicateInput}"` }, { status: 404 });
   if (canonicalId === duplicateId)
     return Response.json({ error: 'Both identifiers resolve to the same patient' }, { status: 400 });
+
+  // Clinic scoping: an admin may only merge patients who have both been seen at
+  // their own clinic (prevents cross-tenant record manipulation).
+  if (!ctx.isDevBypass) {
+    if (!ctx.clinicId) return forbidden('Your account is not attached to a clinic');
+    const [canonOk, dupOk] = await Promise.all([
+      hasVisitAtClinic(canonicalId, ctx.clinicId),
+      hasVisitAtClinic(duplicateId, ctx.clinicId),
+    ]);
+    if (!canonOk || !dupOk) {
+      return forbidden('Both patients must have visits at your clinic to merge');
+    }
+  }
 
   try {
     await mergePatients(canonicalId, duplicateId);

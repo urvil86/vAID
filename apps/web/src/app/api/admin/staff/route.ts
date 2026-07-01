@@ -1,17 +1,21 @@
 import sql from '@/app/api/utils/sql';
-import { requireRole, assertClinic, forbidden } from '@/lib/auth-guard';
+import { requireRole, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { checkOrigin } from '@/lib/csrf';
 
 const STAFF_ROLES = ['doctor', 'receptionist', 'admin'];
 
-// GET /api/admin/staff?clinicId=... — list clinic staff (admin only)
+// GET /api/admin/staff — list the admin's OWN clinic staff (admin only).
+// Any client-supplied clinicId is ignored: the clinic is always derived from
+// the authenticated admin, so an admin can never enumerate other clinics.
 export async function GET(request: Request) {
   const ctx = await requireRole(request, ['admin']);
   if (ctx instanceof Response) return ctx;
 
-  const { searchParams } = new URL(request.url);
-  const clinicId = searchParams.get('clinicId');
-  if (clinicId && !assertClinic(ctx, clinicId)) return forbidden();
+  const clinicId = ctx.clinicId;
+  if (!clinicId && !ctx.isDevBypass) {
+    return forbidden('Your admin account is not attached to a clinic');
+  }
 
   try {
     const staff = await sql`
@@ -20,7 +24,7 @@ export async function GET(request: Request) {
       FROM "user" u
       LEFT JOIN doctor_profiles dp ON dp.user_id = u.id
       WHERE u.role IN ('doctor', 'receptionist', 'admin')
-        AND (${clinicId}::text IS NULL OR u.clinic_id = ${clinicId} OR u.clinic_id IS NULL)
+        AND (${clinicId}::text IS NULL OR u.clinic_id = ${clinicId})
       ORDER BY u.role, u.name
     `;
     return Response.json({ staff });
@@ -35,20 +39,27 @@ export async function GET(request: Request) {
 // phone-OTP onboarding (pending — needs an SMS provider), so this promotes an
 // existing account.
 export async function POST(request: Request) {
+  const csrf = checkOrigin(request);
+  if (csrf) return csrf;
+
   const ctx = await requireRole(request, ['admin']);
   if (ctx instanceof Response) return ctx;
 
   try {
     const body = await request.json();
-    const { email, role, clinicId, registrationNo, specialty } = body;
+    const { email, role, registrationNo, specialty } = body;
 
     if (!email || !role) {
       return Response.json({ error: 'email and role are required' }, { status: 400 });
     }
-    // An admin can only assign staff into their own clinic.
-    if (clinicId && !assertClinic(ctx, clinicId)) return forbidden();
     if (!STAFF_ROLES.includes(role)) {
       return Response.json({ error: `role must be one of ${STAFF_ROLES.join(', ')}` }, { status: 400 });
+    }
+    // Staff are ALWAYS assigned into the admin's own clinic — the client cannot
+    // pick a clinic, so an admin can't promote users into another clinic.
+    const clinicId = ctx.clinicId;
+    if (!clinicId && !ctx.isDevBypass) {
+      return forbidden('Your admin account is not attached to a clinic');
     }
 
     const [user] = await sql`

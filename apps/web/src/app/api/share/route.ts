@@ -1,7 +1,10 @@
+import { randomBytes } from 'node:crypto';
 import sql from '@/app/api/utils/sql';
 import { getMessagingProvider, type MessagingChannel } from '@/lib/messaging';
 import { requireStaff, canAccessPrescription, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+
+const SHARE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 
 /**
  * Share a prescription over WhatsApp/SMS via the messaging provider
@@ -28,7 +31,14 @@ export async function POST(request: Request) {
     await audit(request, ctx, 'share', 'prescription', prescriptionId);
 
     const baseUrl = process.env.BETTER_AUTH_URL || 'http://localhost:4000';
-    const shareUrl = `${baseUrl}/clinic/prescription/${prescriptionId}`;
+    // Mint an expiring, unguessable public link (128-bit token, 72h). Raw-UUID
+    // prescription URLs are no longer publicly resolvable.
+    const token = randomBytes(16).toString('base64url');
+    await sql`
+      INSERT INTO share_tokens (token, prescription_id, created_by, expires_at)
+      VALUES (${token}, ${prescriptionId}, ${ctx.userId}, ${new Date(Date.now() + SHARE_TTL_MS)})
+    `;
+    const shareUrl = `${baseUrl}/rx/${token}`;
 
     // Log the channel as attempted/shared on the prescription.
     if (channel) {

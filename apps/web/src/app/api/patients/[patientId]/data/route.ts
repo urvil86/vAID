@@ -1,6 +1,8 @@
-import { requireRole } from '@/lib/auth-guard';
+import sql from '@/app/api/utils/sql';
+import { requireRole, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { erasePatient } from '@/lib/erasure';
+import { checkOrigin } from '@/lib/csrf';
 
 /**
  * DELETE /api/patients/[patientId]/data — full subject erasure (admin only).
@@ -16,8 +18,24 @@ export async function DELETE(
 ) {
   const { patientId } = await params;
 
+  const csrf = checkOrigin(request);
+  if (csrf) return csrf;
+
   const ctx = await requireRole(request, ['admin']);
   if (ctx instanceof Response) return ctx;
+
+  // Clinic scoping: an admin may only erase a patient seen at their own clinic.
+  // Deny with 404 (not 403) so the response doesn't confirm the id exists.
+  if (!ctx.isDevBypass) {
+    if (!ctx.clinicId) return forbidden('Your account is not attached to a clinic');
+    const [seen] = await sql`
+      SELECT 1 FROM visits WHERE patient_id = ${patientId} AND clinic_id = ${ctx.clinicId} LIMIT 1
+    `;
+    if (!seen) {
+      await audit(request, ctx, 'ACCESS_DENIED', 'user', patientId);
+      return Response.json({ error: 'Not found' }, { status: 404 });
+    }
+  }
 
   try {
     await erasePatient(patientId);

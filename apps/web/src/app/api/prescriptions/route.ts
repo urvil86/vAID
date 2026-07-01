@@ -1,6 +1,8 @@
 import sql from '@/app/api/utils/sql';
 import { requireUser, requireRole, canAccessVisit, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { checkOrigin } from '@/lib/csrf';
+import { parseBody, prescriptionCreateSchema } from '@/lib/validation';
 
 // GET /api/prescriptions?visitId=...
 export async function GET(request: Request) {
@@ -28,15 +30,16 @@ export async function GET(request: Request) {
 
 // POST /api/prescriptions — doctor only
 export async function POST(request: Request) {
+  const csrf = checkOrigin(request);
+  if (csrf) return csrf;
+
   const ctx = await requireRole(request, ['doctor']);
   if (ctx instanceof Response) return ctx;
 
-  const body = await request.json();
-  const { visitId, items, advice, followUpDate } = body;
+  const parsed = await parseBody(request, prescriptionCreateSchema);
+  if (parsed.error) return parsed.error;
+  const { visitId, items, advice, followUpDate } = parsed.data;
 
-  if (!visitId || !items) {
-    return Response.json({ error: 'visitId and items are required' }, { status: 400 });
-  }
   if (!(await canAccessVisit(ctx, visitId))) return forbidden();
 
   const rows = await sql`

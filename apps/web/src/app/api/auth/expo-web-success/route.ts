@@ -9,6 +9,33 @@
  */
 import { auth } from '@/lib/auth';
 
+// Concrete origins we will hand the session token to, derived from the same env
+// as auth.ts trustedOrigins. postMessage only delivers to a frame whose origin
+// matches the target, so looping the allowlist hands the token to the real
+// parent only — never an arbitrary embedder (was posting to '*', a token leak).
+function trustedTargetOrigins(): string[] {
+  const raw = [
+    process.env.BETTER_AUTH_URL,
+    process.env.EXPO_PUBLIC_PROXY_BASE_URL,
+    process.env.NEXT_PUBLIC_CREATE_BASE_URL,
+    process.env.NEXT_PUBLIC_CREATE_HOST ? `https://${process.env.NEXT_PUBLIC_CREATE_HOST}` : null,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : null,
+    process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : null,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  ].filter((v): v is string => Boolean(v));
+  const origins = new Set<string>();
+  for (const u of raw) {
+    try {
+      origins.add(new URL(u).origin);
+    } catch {
+      /* skip malformed */
+    }
+  }
+  return [...origins];
+}
+
 // Renders an HTML page that posts the session token to the parent frame.
 // AuthWebView on the mobile "web" platform listens for this postMessage to
 // capture the session after a successful web signin/signup inside its iframe.
@@ -38,8 +65,14 @@ export async function GET(request: Request) {
 <script>
 (function () {
   var data = ${JSON.stringify(payload)};
+  var origins = ${JSON.stringify(trustedTargetOrigins())};
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage(data, '*');
+    // Deliver only to a parent whose origin is on the allowlist. The browser
+    // drops the message for every non-matching target, so the token cannot
+    // leak to an arbitrary embedder.
+    origins.forEach(function (o) {
+      try { window.parent.postMessage(data, o); } catch (e) {}
+    });
   }
 })();
 </script>

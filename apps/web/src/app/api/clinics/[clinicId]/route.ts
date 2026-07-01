@@ -1,16 +1,28 @@
 import sql from '@/app/api/utils/sql';
-import { requireRole, assertClinic, forbidden } from '@/lib/auth-guard';
+import {
+  requireRole,
+  assertClinic,
+  forbidden,
+  getAuthContext,
+  isStaff,
+} from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { checkOrigin } from '@/lib/csrf';
 
-// GET is intentionally public: the patient check-in landing fetches clinic
-// name/branding before the patient authenticates.
+// GET: minimal public fields (name/branding/language) for the pre-auth check-in
+// landing; the FULL clinic record (rx_header_json, address…) only for
+// authenticated staff scoped to this clinic.
 export async function GET(request: Request, { params }: { params: Promise<{ clinicId: string }> }) {
   const { clinicId } = await params;
 
   try {
-    const [clinic] = await sql`
-      SELECT * FROM clinics WHERE id = ${clinicId}
-    `;
+    const ctx = await getAuthContext(request.headers);
+    const scopedStaff =
+      !!ctx && (ctx.isDevBypass || (isStaff(ctx.role) && ctx.clinicId === clinicId));
+
+    const [clinic] = scopedStaff
+      ? await sql`SELECT * FROM clinics WHERE id = ${clinicId}`
+      : await sql`SELECT id, name, default_language, branding_json FROM clinics WHERE id = ${clinicId}`;
 
     if (!clinic) {
       return Response.json({ error: 'Clinic not found' }, { status: 404 });
@@ -27,6 +39,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ clin
 // branding). Only provided fields change.
 export async function PUT(request: Request, { params }: { params: Promise<{ clinicId: string }> }) {
   const { clinicId } = await params;
+
+  const csrf = checkOrigin(request);
+  if (csrf) return csrf;
 
   const ctx = await requireRole(request, ['admin']);
   if (ctx instanceof Response) return ctx;

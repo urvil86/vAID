@@ -190,6 +190,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Expiring share links for prescriptions. A random 128-bit token resolves to a
+-- prescription for a limited window (public /rx/[token] view). Raw-UUID
+-- prescription URLs are no longer publicly resolvable.
+CREATE TABLE IF NOT EXISTS share_tokens (
+  token           text PRIMARY KEY,
+  prescription_id uuid NOT NULL,
+  created_by      text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  expires_at      timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_share_tokens_rx ON share_tokens (prescription_id);
+
 -- Fixed-window rate-limit counters (Postgres-backed; see src/lib/rate-limit.ts).
 -- Neon-serverless friendly: no Redis assumed. Expired windows are swept
 -- opportunistically on write.

@@ -22,7 +22,9 @@ export type AuditAction =
   | 'staff_assign'
   | 'clinic_update'
   | 'merge_patient'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'ACCESS_DENIED'
+  | 'rx_view';
 
 function clientIp(req: Request): string | null {
   const fwd = req.headers.get('x-forwarded-for');
