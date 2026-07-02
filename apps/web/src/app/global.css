@@ -1,7 +1,7 @@
 /* External @import rules must precede all other rules. `@import "tailwindcss"`
    expands inline under Tailwind v4's PostCSS pipeline, so the Google Fonts
    import has to sit above it or the compiled CSS becomes invalid. */
-@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;700;800&family=Noto+Sans+Devanagari:wght@400;700&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -174,3 +174,31 @@
 .hindi {
     font-family: var(--font-noto);
 }
+
+/* Landing-page voice-thread animations (V·Aid marketing hero) */
+@keyframes vaRing {
+    0% { transform: scale(.55); opacity: .5; }
+    100% { transform: scale(1.2); opacity: 0; }
+}
+@keyframes vaPulse {
+    0% { transform: translate(-50%, -50%) scale(.7); opacity: .65; }
+    70% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+    100% { opacity: 0; }
+}
+@keyframes vaWave {
+    0%, 100% { transform: scaleY(.28); }
+    50% { transform: scaleY(1); }
+}
+@keyframes vaBlink {
+    50% { opacity: 0; }
+}
+
+/* Landing-page hover affordances (warm paper). Base colour lives here so the
+   :hover can win over it — the element keeps the rest of its style inline. */
+.va-nav-link { color: #6b6258; cursor: pointer; transition: color .15s; }
+.va-nav-link:hover { color: #211d17; }
+.va-cta { background: #d8693e; transition: background .15s; }
+.va-cta:hover { background: #c75f39; }
+.va-cta-ft:hover { background: #e08a63; }
+.va-underline { border-bottom: 2px solid #d8c9b2; transition: border-color .15s; }
+.va-underline:hover { border-color: #d8693e; }
