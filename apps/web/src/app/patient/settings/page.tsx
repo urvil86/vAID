@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY, isLanguageEnabled } from '@/lib/i18n';
 import { downloadRecordPdf } from '@/lib/record-pdf';
+import FamilyCard from '@/components/FamilyCard';
 import { Loader2, Star, Trash2, Plus, LogOut, Download, BadgeCheck } from 'lucide-react';
 
 type Clinic = { id: string; name: string };
@@ -120,6 +121,10 @@ export default function PatientSettingsPage() {
   const otherClinics = (Array.isArray(clinics) ? clinics : []).filter((c) => !favIds.has(c.id));
   const inputCls =
     'w-full rounded-xl border border-patient-border bg-white px-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors';
+  // Tighter horizontal padding for the D/M/Y selects so the value (esp. the
+  // 4-digit year) isn't clipped by the native dropdown arrow.
+  const dobCls =
+    'w-full rounded-xl border border-patient-border bg-white px-1.5 h-12 text-[15px] text-patient-ink outline-none focus:border-patient-accent transition-colors';
 
   return (
     <PatientLayout>
@@ -137,42 +142,41 @@ export default function PatientSettingsPage() {
               <span className="text-sm font-medium text-patient-ink">Name</span>
               <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="block space-y-1">
-                <span className="text-sm font-medium text-patient-ink">Date of birth</span>
-                <div className="grid grid-cols-3 gap-2">
-                  <select value={dobD} onChange={(e) => setDobD(e.target.value)} className={inputCls} aria-label="Day">
-                    <option value="">Day</option>
-                    {Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                  <select value={dobM} onChange={(e) => setDobM(e.target.value)} className={inputCls} aria-label="Month">
-                    <option value="">Month</option>
-                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(
-                      (label, i) => (
-                        <option key={label} value={String(i + 1)}>{label}</option>
-                      )
-                    )}
-                  </select>
-                  <select value={dobY} onChange={(e) => setDobY(e.target.value)} className={inputCls} aria-label="Year">
-                    <option value="">Year</option>
-                    {Array.from({ length: 110 }, (_, i) => String(CURRENT_YEAR - i)).map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <label className="block space-y-1">
-                <span className="text-sm font-medium text-patient-ink">Sex</span>
-                <select value={sex} onChange={(e) => setSex(e.target.value)} className={inputCls}>
-                  <option value="">—</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
+            {/* DOB gets its own full-width row so the year isn't truncated. */}
+            <div className="block space-y-1">
+              <span className="text-sm font-medium text-patient-ink">Date of birth</span>
+              <div className="grid grid-cols-[1fr_1.2fr_1.3fr] gap-2">
+                <select value={dobD} onChange={(e) => setDobD(e.target.value)} className={dobCls} aria-label="Day">
+                  <option value="">Day</option>
+                  {Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
-              </label>
+                <select value={dobM} onChange={(e) => setDobM(e.target.value)} className={dobCls} aria-label="Month">
+                  <option value="">Month</option>
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(
+                    (label, i) => (
+                      <option key={label} value={String(i + 1)}>{label}</option>
+                    )
+                  )}
+                </select>
+                <select value={dobY} onChange={(e) => setDobY(e.target.value)} className={dobCls} aria-label="Year">
+                  <option value="">Year</option>
+                  {Array.from({ length: 110 }, (_, i) => String(CURRENT_YEAR - i)).map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium text-patient-ink">Sex</span>
+              <select value={sex} onChange={(e) => setSex(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
             <label className="block space-y-1">
               <span className="text-sm font-medium text-patient-ink">Preferred language</span>
               <select value={lang} onChange={(e) => setLang(e.target.value)} className={inputCls}>
@@ -256,6 +260,9 @@ export default function PatientSettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Family / dependents */}
+        <FamilyCard />
 
         {/* Account actions */}
         <Card className="bg-patient-card border-patient-border">

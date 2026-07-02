@@ -219,14 +219,32 @@ export async function POST(request: Request) {
   }
 
   try {
-    const [session] = await sql`
+    let [session] = await sql`
       SELECT * FROM intake_sessions WHERE id = ${sessionId}
     `;
 
-    if (!session || !session.transcript_native) {
-      return Response.json({ error: 'Session or transcript not found' }, { status: 400 });
+    // If this session has no transcript, another session for the same visit may
+    // hold it (a stray empty session can otherwise dead-end the review screen).
+    if (session && (!session.transcript_native || !String(session.transcript_native).trim())) {
+      const [alt] = await sql`
+        SELECT * FROM intake_sessions
+        WHERE visit_id = ${session.visit_id}
+          AND transcript_native IS NOT NULL AND btrim(transcript_native) <> ''
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      if (alt) session = alt;
     }
 
+    if (!session || !session.transcript_native || !String(session.transcript_native).trim()) {
+      return Response.json(
+        { error: 'This intake has no recorded answers yet. Please complete the questions first.' },
+        { status: 400 }
+      );
+    }
+
+    // Structure whichever session actually holds the transcript.
+    const activeSessionId: string = session.id;
     const transcript: string = session.transcript_native;
     const language: string | undefined = session.language;
 
@@ -331,7 +349,7 @@ export async function POST(request: Request) {
         UPDATE intake_sessions
         SET structured_note_json = ${structuredNote},
             transcript_english = ${structuredNote.history_of_present_illness}
-        WHERE id = ${sessionId}
+        WHERE id = ${activeSessionId}
       `;
     } catch (e) {
       // Persistence failed, but still return the note so the patient isn't
@@ -349,14 +367,14 @@ export async function POST(request: Request) {
             note_status = 'ai_draft',
             structuring_source = ${structuringSource},
             structuring_status = ${structuringStatus}
-        WHERE id = ${sessionId} AND signed_at IS NULL
+        WHERE id = ${activeSessionId} AND signed_at IS NULL
       `;
     } catch (e) {
       console.warn('[structure] extended note columns not updated (schema may be behind):', e);
     }
     // Version 1 = the AI draft baseline (used for the doctor-edit diff).
     try {
-      await writeNoteVersion(sessionId, structuredNote, null, 'AI draft');
+      await writeNoteVersion(activeSessionId, structuredNote, null, 'AI draft');
     } catch (e) {
       console.warn('[structure] note version not written:', e);
     }

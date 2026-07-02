@@ -1,5 +1,5 @@
 import sql from '@/app/api/utils/sql';
-import { requireUser, isStaff, forbidden } from '@/lib/auth-guard';
+import { requireUser, isStaff, forbidden, canActAsPatient } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
 import { eraseVisitIntake } from '@/lib/erasure';
 
@@ -21,9 +21,10 @@ export async function POST(request: Request) {
     if (!patientId || !textShown) {
       return Response.json({ error: 'patientId and textShown are required' }, { status: 400 });
     }
-    // A patient records their own consent; staff may record on their behalf.
-    if (!ctx.isDevBypass && !isStaff(ctx.role) && ctx.userId !== patientId) {
-      return forbidden('You can only record your own consent');
+    // A patient records their own consent (or a dependent's, if they manage
+    // them); staff may record on their behalf.
+    if (!ctx.isDevBypass && !isStaff(ctx.role) && !(await canActAsPatient(ctx, patientId))) {
+      return forbidden('You can only record consent for yourself or someone you manage');
     }
 
     const [consent] = await sql`

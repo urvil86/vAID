@@ -29,7 +29,13 @@ export default function PatientConsentPage() {
     setLoading(true);
     setError(null);
     try {
-      const patientId = session?.user?.id ?? 'temp-patient';
+      // A `for` query param means the account holder is checking in a dependent
+      // they manage; otherwise the visit is for the signed-in user.
+      const forId =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('for')
+          : null;
+      const patientId = forId || session?.user?.id || 'temp-patient';
       // The token is assigned server-side (real per-clinic daily sequence).
       const res = await fetch('/api/visits', {
         method: 'POST',

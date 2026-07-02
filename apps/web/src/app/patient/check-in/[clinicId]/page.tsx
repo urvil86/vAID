@@ -25,7 +25,22 @@ export default function PatientCheckInPage() {
   const [language, setLanguage] = useState('Hindi');
   const [phone, setPhone] = useState('');
   const [showAllLangs, setShowAllLangs] = useState(false);
+  const [forPatient, setForPatient] = useState(''); // '' = self; else a dependent's user_id
   const { data: session } = authClient.useSession();
+
+  // Dependents the account holder manages, so a parent can check in a child.
+  const { data: family } = useQuery<{
+    members: { user_id: string; name: string; is_self: boolean }[];
+  }>({
+    queryKey: ['family-checkin'],
+    queryFn: async () => {
+      const res = await fetch('/api/family');
+      if (!res.ok) return { members: [] };
+      return res.json();
+    },
+    enabled: !!session,
+  });
+  const dependents = (family?.members || []).filter((m) => !m.is_self);
 
   useEffect(() => {
     // Remembered phone from a previous visit — no need to retype it.
@@ -81,8 +96,11 @@ export default function PatientCheckInPage() {
         body: JSON.stringify({ phone: `+91${digits.slice(-10)}` }),
       }).catch(() => {});
     }
-    if (session || DEV_AUTH_BYPASS) router.push(`/patient/consent/${clinicId}`);
-    else router.push(`/account/signin?callbackUrl=/patient/consent/${clinicId}`);
+    const consentPath = forPatient
+      ? `/patient/consent/${clinicId}?for=${encodeURIComponent(forPatient)}`
+      : `/patient/consent/${clinicId}`;
+    if (session || DEV_AUTH_BYPASS) router.push(consentPath);
+    else router.push(`/account/signin?callbackUrl=${encodeURIComponent(consentPath)}`);
   };
 
   if (isLoading) {
@@ -111,6 +129,40 @@ export default function PatientCheckInPage() {
         <h1 className={`text-3xl font-bold leading-snug text-patient-ink ${isHindi ? 'hindi' : ''}`}>
           {s.checkInSubtitle}
         </h1>
+
+        {/* Who is this visit for? — only when the account manages dependents */}
+        {dependents.length > 0 && (
+          <div className="mt-6">
+            <p className="mono-tag text-patient-muted text-[10px] mb-2">
+              {isHindi ? 'यह विज़िट किसके लिए है?' : "WHO IS THIS VISIT FOR?"}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setForPatient('')}
+                className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                  forPatient === ''
+                    ? 'bg-patient-ink text-white border-patient-ink'
+                    : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/60'
+                }`}
+              >
+                {isHindi ? 'मैं' : 'Myself'}
+              </button>
+              {dependents.map((dep) => (
+                <button
+                  key={dep.user_id}
+                  onClick={() => setForPatient(dep.user_id)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+                    forPatient === dep.user_id
+                      ? 'bg-patient-ink text-white border-patient-ink'
+                      : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/60'
+                  }`}
+                >
+                  {dep.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Language chips */}
         <div className="mt-8">

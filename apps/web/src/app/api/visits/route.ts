@@ -21,12 +21,17 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  // A patient may only create their own visit; staff only within their clinic.
+  // A patient may check in themselves or a dependent they manage; staff only
+  // within their clinic.
   if (!ctx.isDevBypass) {
     if (isStaff(ctx.role)) {
       if (!assertClinic(ctx, clinicId)) return forbidden();
     } else if (ctx.userId !== patientId) {
-      return forbidden('You can only check in for yourself');
+      const [managed] = await sql`
+        SELECT 1 FROM patient_profiles
+        WHERE user_id = ${patientId} AND managed_by = ${ctx.userId}
+      `;
+      if (!managed) return forbidden('You can only check in for yourself or someone you manage');
     }
   }
 
@@ -101,8 +106,14 @@ export async function GET(request: Request) {
         (isStaff(ctx.role) && (await hasHistoryShareConsent(patientId, ctx.clinicId)));
       const clinicFilter = fullHistory ? null : ctx.clinicId;
 
+      // When the account holder views their own history with family=1, fold in
+      // visits for the dependents they manage (each row keeps patient_name so
+      // the UI can label whose visit it is).
+      const includeFamily = isSelf && searchParams.get('family') === '1';
+
       visits = await sql`
         SELECT v.*, u.name as patient_name,
+               (v.patient_id = ${patientId}) as is_self,
                c.name as clinic_name,
                ist.structured_note_json,
                ist.status as intake_status
@@ -113,7 +124,15 @@ export async function GET(request: Request) {
           SELECT structured_note_json, status FROM intake_sessions
           WHERE visit_id = v.id ORDER BY created_at DESC LIMIT 1
         ) ist ON true
-        WHERE v.patient_id = ${patientId}
+        WHERE (
+                v.patient_id = ${patientId}
+                OR (
+                  ${includeFamily}
+                  AND v.patient_id IN (
+                    SELECT user_id FROM patient_profiles WHERE managed_by = ${patientId}
+                  )
+                )
+              )
           AND (${clinicFilter}::text IS NULL OR v.clinic_id::text = ${clinicFilter})
         ORDER BY v.created_at DESC
       `;

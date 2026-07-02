@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS clinics (
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 
+-- Demo clinics (fixed UUIDs → idempotent) so patients have real clinics to
+-- pick and favourite. Sunrise may already exist under a different id from the
+-- original seed; these are additive and safe to re-run.
+INSERT INTO clinics (id, name, address, default_language) VALUES
+  ('11111111-1111-1111-1111-111111111101', 'Sunrise Family Clinic', 'MG Road, Bengaluru', 'Hindi'),
+  ('11111111-1111-1111-1111-111111111102', 'Asha Community Health Centre', 'Sector 12, Noida', 'Hindi'),
+  ('11111111-1111-1111-1111-111111111103', 'Care & Cure Polyclinic', 'FC Road, Pune', 'Marathi'),
+  ('11111111-1111-1111-1111-111111111104', 'LifeLine Medical Centre', 'Anna Nagar, Chennai', 'Tamil'),
+  ('11111111-1111-1111-1111-111111111105', 'Sanjeevani Clinic', 'Ashram Road, Ahmedabad', 'Gujarati')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS visits (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   patient_id          text NOT NULL,

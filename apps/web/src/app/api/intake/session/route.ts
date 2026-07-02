@@ -16,9 +16,14 @@ export async function GET(request: Request) {
   await audit(request, ctx, 'read', 'intake', visitId);
 
   try {
+    // Prefer the session that actually holds a transcript: a stray empty session
+    // (e.g. re-opening intake after completion) must not shadow the completed
+    // one and leave the review screen with nothing to structure.
     const [session] = await sql`
       SELECT * FROM intake_sessions WHERE visit_id = ${visitId}
-      ORDER BY created_at DESC
+      ORDER BY
+        (transcript_native IS NOT NULL AND btrim(transcript_native) <> '') DESC,
+        created_at DESC
       LIMIT 1
     `;
 

@@ -17,6 +17,8 @@ type PatientVisit = {
   status: string;
   created_at: string;
   clinic_name?: string;
+  patient_name?: string;
+  is_self?: boolean;
   structured_note_json?: { chief_complaint?: string } | null;
 };
 
@@ -35,7 +37,8 @@ export default function PatientHistoryPage() {
   const { data: visits, isLoading } = useQuery<PatientVisit[]>({
     queryKey: ['patient-visits', patientId],
     queryFn: async () => {
-      const res = await fetch(`/api/visits?patientId=${patientId}`);
+      // family=1 folds in visits for dependents the account holder manages.
+      const res = await fetch(`/api/visits?patientId=${patientId}&family=1`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -132,6 +135,11 @@ export default function PatientHistoryPage() {
                       </p>
                       <span className="mono-tag text-[10px] text-patient-accent">{v.status}</span>
                     </div>
+                    {v.is_self === false && v.patient_name && (
+                      <span className="inline-block mb-1 px-2 py-0.5 rounded-full bg-patient-accent/10 text-patient-accent text-[11px] font-semibold">
+                        {v.patient_name}
+                      </span>
+                    )}
                     <p className="font-bold text-patient-ink">
                       {v.structured_note_json?.chief_complaint || 'Intake recorded'}
                     </p>

@@ -151,7 +151,26 @@ export async function canAccessVisit(ctx: AuthContext, visitId: string): Promise
   const [v] = await sql`SELECT patient_id, clinic_id FROM visits WHERE id = ${visitId}`;
   if (!v) return false;
   if (isStaff(ctx.role)) return !!ctx.clinicId && ctx.clinicId === v.clinic_id;
-  return ctx.userId === v.patient_id;
+  if (ctx.userId === v.patient_id) return true;
+  // The account holder may access a dependent's visit they manage (family 3.3).
+  const [managed] = await sql`
+    SELECT 1 FROM patient_profiles WHERE user_id = ${v.patient_id} AND managed_by = ${ctx.userId}
+  `;
+  return !!managed;
+}
+
+/**
+ * True when ctx may act on behalf of `patientId`: themselves, or a dependent
+ * they manage (family 3.3). Does not grant staff access — callers layer that on.
+ */
+export async function canActAsPatient(ctx: AuthContext, patientId: string): Promise<boolean> {
+  if (ctx.isDevBypass) return true;
+  if (!patientId) return false;
+  if (ctx.userId === patientId) return true;
+  const [m] = await sql`
+    SELECT 1 FROM patient_profiles WHERE user_id = ${patientId} AND managed_by = ${ctx.userId}
+  `;
+  return !!m;
 }
 
 /** Intake-session access — resolved via its visit. */
