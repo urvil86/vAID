@@ -1,6 +1,7 @@
 import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { requireUser } from '@/lib/auth-guard';
 import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
+import { deidentify } from '@/lib/deidentify';
 
 /**
  * Adaptive intake follow-up.
@@ -62,13 +63,15 @@ export async function POST(request: Request) {
     if (!answer || typeof answer !== 'string' || !answer.trim()) {
       return Response.json({ followup: null });
     }
+    // De-identify before the third-party call (3.6): strip phone/ABHA patterns.
+    const safeAnswer = deidentify(answer);
 
     const content = await openRouterChat({
       system: SYSTEM_PROMPT,
       user:
         `Patient language: ${language || 'English'}\n` +
         `Question asked: ${question}\n` +
-        `Patient answer: ${answer}\n\n` +
+        `Patient answer: ${safeAnswer}\n\n` +
         `Return JSON with one follow-up question (in ${language || 'English'}) only if the answer is too thin to structure; otherwise {"followup": null}.`,
       jsonObject: true,
       maxTokens: 200,

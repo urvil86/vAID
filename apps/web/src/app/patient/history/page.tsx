@@ -66,9 +66,28 @@ export default function PatientHistoryPage() {
   return (
     <PatientLayout>
       <div className="flex-1 p-6 flex flex-col">
-        <div className="mb-6">
-          <p className="mono-tag text-patient-muted mb-1">YOUR VISITS</p>
-          <h1 className="text-2xl font-bold text-patient-ink">Visit history</h1>
+        <div className="mb-6 flex items-end justify-between gap-3">
+          <div>
+            <p className="mono-tag text-patient-muted mb-1">YOUR VISITS</p>
+            <h1 className="text-2xl font-bold text-patient-ink">Visit history</h1>
+          </div>
+          <button
+            onClick={async () => {
+              const res = await fetch('/api/my-record');
+              if (!res.ok) return;
+              const data = await res.json();
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `my-vaid-record.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="text-sm font-semibold text-patient-accent hover:underline whitespace-nowrap"
+          >
+            Download my record
+          </button>
         </div>
 
         <AbhaCard initial={profile?.abha_id || ''} uhid={profile?.uhid || ''} />

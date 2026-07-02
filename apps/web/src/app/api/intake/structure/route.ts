@@ -8,6 +8,7 @@ import { writeNoteVersion } from '@/lib/note-lifecycle';
 import { validateStructuredNote } from '@/lib/validation/structured-note';
 import { applyGrounding } from '@/lib/grounding';
 import { overDailyBudget, recordAiSpend } from '@/lib/ai-cost';
+import { deidentify } from '@/lib/deidentify';
 
 // Instruction shared by every LLM-backed structuring path. Written to be
 // multilingual: patients in India answer in Hindi, English, or any other major
@@ -225,6 +226,20 @@ export async function POST(request: Request) {
     const clinicId = (vrow?.clinic_id as string) || null;
     const budgetExceeded = await overDailyBudget(clinicId);
 
+    // De-identify before ANY third-party call (3.6): no name/phone/ABHA leaves
+    // the platform. The local tier + grounding use the raw in-house transcript.
+    const [ident] = await sql`
+      SELECT u.name, u."phoneNumber" AS phone, pp.abha_id AS abha
+      FROM visits v JOIN "user" u ON u.id = v.patient_id
+      LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+      WHERE v.id = ${session.visit_id}
+    `;
+    const safeTranscript = deidentify(transcript, {
+      name: ident?.name as string,
+      phone: ident?.phone as string,
+      abha: ident?.abha as string,
+    });
+
     // Preference order: OpenRouter (cheap multilingual) → platform → local.
     // Each tier's output is VALIDATED against the strict note schema; an invalid
     // note degrades to the next tier rather than reaching the record. A 25s
@@ -242,8 +257,8 @@ export async function POST(request: Request) {
 
     if (!thirdPartyDisabled && !budgetExceeded) {
       const tiers = [
-        ['openrouter', () => structureViaOpenRouter(transcript, language)],
-        ['platform', () => structureViaPlatform(transcript)],
+        ['openrouter', () => structureViaOpenRouter(safeTranscript, language)],
+        ['platform', () => structureViaPlatform(safeTranscript)],
       ] as const;
       const deadline = Date.now() + 25_000;
       for (const [source, attempt] of tiers) {

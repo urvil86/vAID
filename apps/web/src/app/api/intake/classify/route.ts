@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth-guard';
 import { openRouterChat, parseLooseJson } from '@/lib/openrouter';
 import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 import { BODY_SYSTEMS, branchQuestions, type BodySystem } from '@/data/intake-scripts';
+import { deidentify } from '@/lib/deidentify';
 
 /**
  * POST /api/intake/classify  { chiefComplaint, language?, baseCount? }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     try {
       const content = await openRouterChat({
         system: SYSTEM_PROMPT,
-        user: String(chiefComplaint),
+        user: deidentify(String(chiefComplaint)),
         jsonObject: true,
         maxTokens: 40,
         temperature: 0,
