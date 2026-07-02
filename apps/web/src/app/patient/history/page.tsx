@@ -79,7 +79,7 @@ export default function PatientHistoryPage() {
             onClick={() => void downloadRecordPdf()}
             className="text-sm font-semibold text-patient-accent hover:underline whitespace-nowrap"
           >
-            Download my record
+            Download my record (PDF)
           </button>
         </div>
 

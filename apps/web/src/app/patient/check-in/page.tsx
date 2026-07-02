@@ -56,9 +56,23 @@ export default function CheckInPickerPage() {
         <div>
           <p className="mono-tag text-patient-muted mb-1">CHECK IN</p>
           <h1 className="text-2xl font-bold text-patient-ink">Choose your clinic</h1>
-          <p className="text-patient-muted text-sm mt-1 flex items-center gap-1.5">
-            <QrCode className="w-4 h-4" /> No QR needed — pick below, or scan your clinic&apos;s code.
+          <p className="text-patient-muted text-sm mt-1">
+            Scan your clinic&apos;s QR code, or pick from the list below.
           </p>
+        </div>
+
+        {/* Scan QR — the primary path; the list is the no-QR fallback. */}
+        <button
+          onClick={() => router.push('/patient/scan')}
+          className="w-full h-14 rounded-2xl bg-patient-accent hover:bg-patient-accent/90 text-white font-bold flex items-center justify-center gap-2.5 shadow-sm"
+        >
+          <QrCode className="w-5 h-5" /> Scan clinic QR code
+        </button>
+
+        <div className="flex items-center gap-3 text-patient-muted">
+          <span className="h-px flex-1 bg-patient-border" />
+          <span className="mono-tag text-[10px]">OR PICK A CLINIC</span>
+          <span className="h-px flex-1 bg-patient-border" />
         </div>
 
         {isLoading ? (
