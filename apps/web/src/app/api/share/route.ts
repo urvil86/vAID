@@ -3,6 +3,7 @@ import sql from '@/app/api/utils/sql';
 import { getMessagingProvider, type MessagingChannel } from '@/lib/messaging';
 import { requireStaff, canAccessPrescription, forbidden } from '@/lib/auth-guard';
 import { audit } from '@/lib/audit';
+import { logEvent } from '@/lib/events';
 
 const SHARE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
     }
     if (!(await canAccessPrescription(ctx, prescriptionId))) return forbidden();
     await audit(request, ctx, 'share', 'prescription', prescriptionId);
+    await logEvent('rx_shared', null, ctx.clinicId, { prescriptionId });
 
     const baseUrl = process.env.BETTER_AUTH_URL || 'http://localhost:4000';
     // Mint an expiring, unguessable public link (128-bit token, 72h). Raw-UUID

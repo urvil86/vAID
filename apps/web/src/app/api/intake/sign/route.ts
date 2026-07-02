@@ -4,6 +4,7 @@ import { audit } from '@/lib/audit';
 import { checkOrigin } from '@/lib/csrf';
 import { writeNoteVersion } from '@/lib/note-lifecycle';
 import { populateClinicalResources } from '@/lib/clinical-resources';
+import { logEvent } from '@/lib/events';
 
 /**
  * POST /api/intake/sign — the doctor signs the note. Sets note_status='signed',
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
   // Sign-time: narrative -> coded FHIR-aligned resources (verified by the doctor).
   const [v] = await sql`SELECT visit_id FROM intake_sessions WHERE id = ${sessionId}`;
   if (v?.visit_id) {
-    const [visit] = await sql`SELECT patient_id FROM visits WHERE id = ${v.visit_id}`;
+    const [visit] = await sql`SELECT patient_id, clinic_id FROM visits WHERE id = ${v.visit_id}`;
     if (visit?.patient_id) {
       await populateClinicalResources(
         v.visit_id as string,
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
         ctx.userId
       );
     }
+    await logEvent('note_signed', v.visit_id as string, (visit?.clinic_id as string) ?? null);
   }
 
   return Response.json({ ok: true, note_status: 'signed', signed_by: ctx.userId });

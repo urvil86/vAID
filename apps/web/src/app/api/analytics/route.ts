@@ -81,6 +81,38 @@ export async function GET(request: Request) {
       WHERE v.clinic_id = ${clinicId}
     `;
 
+    // ── Pilot metrics (3.5): retention + ops ─────────────────────────────────
+    const [retention] = await sql`
+      WITH pv AS (
+        SELECT patient_id, count(*) AS n,
+               (max(created_at) - min(created_at)) AS span
+        FROM visits WHERE clinic_id = ${clinicId} GROUP BY patient_id
+      )
+      SELECT
+        count(*) FILTER (WHERE n >= 2 AND span <= interval '90 days')::int AS returned_90d,
+        count(*)::int AS total_patients
+      FROM pv
+    `;
+    const [crossClinic] = await sql`
+      SELECT
+        count(DISTINCT v.patient_id)::int AS patients,
+        count(DISTINCT c.patient_id) FILTER (WHERE c.scope = 'history_share' AND c.withdrawn_at IS NULL)::int AS consenting
+      FROM visits v
+      LEFT JOIN consent c ON c.patient_id = v.patient_id
+      WHERE v.clinic_id = ${clinicId}
+    `;
+    const [ops] = await sql`
+      SELECT
+        percentile_cont(0.5) WITHIN GROUP (
+          ORDER BY extract(epoch FROM (intake_completed_at - intake_started_at)) / 60
+        ) FILTER (WHERE intake_completed_at IS NOT NULL AND intake_started_at IS NOT NULL) AS median_intake_min
+      FROM visits WHERE clinic_id = ${clinicId}
+    `;
+    const [cost] = await sql`
+      SELECT coalesce(sum(spend_usd), 0) AS spend, coalesce(sum(calls), 0) AS calls
+      FROM ai_usage WHERE clinic_id = ${clinicId}
+    `;
+
     const num = (x: unknown) => (x == null ? 0 : Number(x));
     const totalVisits = num(row.total_visits);
     const consultDenom = num(row.consult_denom);
@@ -108,6 +140,18 @@ export async function GET(request: Request) {
         structuringSourceMix,
         signedNotes: num(signStats?.signed),
         signedWithoutEdits: num(signStats?.signed_no_edits),
+      },
+      // Pilot metrics (retention + ops)
+      pilot: {
+        returningWithin90dPct: num(retention?.total_patients)
+          ? Math.round((num(retention?.returned_90d) / num(retention?.total_patients)) * 100)
+          : 0,
+        crossClinicConsentPct: num(crossClinic?.patients)
+          ? Math.round((num(crossClinic?.consenting) / num(crossClinic?.patients)) * 100)
+          : 0,
+        medianIntakeMin: ops?.median_intake_min == null ? null : Number(ops.median_intake_min),
+        aiSpendUsd: num(cost?.spend),
+        aiCostPerVisit: totalVisits ? num(cost?.spend) / totalVisits : 0,
       },
     });
   } catch (error) {

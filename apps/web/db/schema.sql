@@ -379,6 +379,18 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_share_tokens_rx ON share_tokens (prescription_id);
 
+-- Pilot instrumentation (3.5): lightweight event log kept in Postgres (no
+-- third-party analytics). Powers the pilot metrics on the analytics dashboard.
+CREATE TABLE IF NOT EXISTS analytics_events (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event         text NOT NULL,   -- intake_started | intake_completed | note_signed | rx_shared | intake_abandoned
+  visit_id      uuid,
+  clinic_id     text,
+  metadata_json jsonb,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_analytics_events_clinic ON analytics_events (clinic_id, event);
+
 -- Ops (3.4): per-clinic daily AI spend (cost controls) + cold audit archive +
 -- consent soft-delete (30-day recovery window before hard purge).
 CREATE TABLE IF NOT EXISTS ai_usage (

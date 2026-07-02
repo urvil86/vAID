@@ -1,5 +1,6 @@
 import sql from '@/app/api/utils/sql';
 import { requireUser, canAccessVisit, canAccessIntakeSession, forbidden } from '@/lib/auth-guard';
+import { logEvent } from '@/lib/events';
 
 export async function POST(request: Request) {
   const ctx = await requireUser(request);
@@ -16,10 +17,12 @@ export async function POST(request: Request) {
     `;
 
     // Update visit status
-    await sql`
+    const [v] = await sql`
       UPDATE visits SET status = 'INTAKE IN PROGRESS', intake_started_at = now()
       WHERE id = ${visitId}
+      RETURNING clinic_id
     `;
+    await logEvent('intake_started', visitId, (v?.clinic_id as string) ?? null);
 
     return Response.json(session);
   } catch (error) {
@@ -52,10 +55,12 @@ export async function PUT(request: Request) {
     `;
 
     if (status === 'COMPLETED') {
-      await sql`
+      const [v] = await sql`
         UPDATE visits SET status = 'INTAKE COMPLETE', intake_completed_at = now()
         WHERE id = ${session.visit_id}
+        RETURNING clinic_id
       `;
+      await logEvent('intake_completed', session.visit_id as string, (v?.clinic_id as string) ?? null);
     }
 
     return Response.json(session);
