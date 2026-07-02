@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import PatientLayout from '@/components/PatientLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { authClient } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
@@ -18,10 +17,10 @@ export default function PatientCheckInPage() {
   const router = useRouter();
   const clinicId = params.clinicId as string;
   const [language, setLanguage] = useState('Hindi');
+  const [phone, setPhone] = useState('');
+  const [showAllLangs, setShowAllLangs] = useState(false);
   const { data: session } = authClient.useSession();
 
-  // Restore last-used language from storage; otherwise fall back to the
-  // patient's saved preferred language (set at signup / in settings).
   useEffect(() => {
     const saved = localStorage.getItem(LANG_STORAGE_KEY);
     if (saved) {
@@ -42,6 +41,7 @@ export default function PatientCheckInPage() {
   }, []);
 
   const s = getStrings(language);
+  const isHindi = language === 'Hindi';
 
   const { data: clinic, isLoading } = useQuery({
     queryKey: ['clinic', clinicId],
@@ -52,19 +52,24 @@ export default function PatientCheckInPage() {
     },
   });
 
-  const handleLanguageSelect = (lang: string) => {
+  const selectLang = (lang: string) => {
     setLanguage(lang);
     localStorage.setItem(LANG_STORAGE_KEY, lang);
   };
 
   const handleStart = () => {
-    // Persist language choice before navigating
     localStorage.setItem(LANG_STORAGE_KEY, language);
-    if (session || DEV_AUTH_BYPASS) {
-      router.push(`/patient/consent/${clinicId}`);
-    } else {
-      router.push(`/account/signin?callbackUrl=/patient/consent/${clinicId}`);
+    // Capture phone on the profile (best-effort; OTP verification is paused).
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+91${digits.slice(-10)}` }),
+      }).catch(() => {});
     }
+    if (session || DEV_AUTH_BYPASS) router.push(`/patient/consent/${clinicId}`);
+    else router.push(`/account/signin?callbackUrl=/patient/consent/${clinicId}`);
   };
 
   if (isLoading) {
@@ -77,60 +82,85 @@ export default function PatientCheckInPage() {
     );
   }
 
-  const isHindi = language === 'Hindi';
+  const shown = showAllLangs ? AVAILABLE_LANGUAGES : AVAILABLE_LANGUAGES.slice(0, 3);
+  const more = AVAILABLE_LANGUAGES.length - 3;
 
   return (
     <PatientLayout>
-      <div className="flex-1 p-6 flex flex-col items-center justify-center text-center">
-        {/* Clinic branding */}
-        <div className="mb-10">
-          <div className="w-16 h-16 bg-patient-border/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl font-black text-patient-accent">V</span>
+      <div className="flex-1 px-6 py-8 flex flex-col">
+        {/* Clinic tag */}
+        <p className="mono-tag text-patient-muted text-[11px] flex items-center gap-2 mb-6">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-patient-accent" />
+          {(clinic?.name || 'Clinic').toUpperCase()}
+        </p>
+
+        {/* Greeting */}
+        <h1 className={`text-3xl font-bold leading-snug text-patient-ink ${isHindi ? 'hindi' : ''}`}>
+          {s.checkInSubtitle}
+        </h1>
+
+        {/* Language chips */}
+        <div className="mt-8">
+          <p className="mono-tag text-patient-muted text-[10px] mb-3">{s.selectLanguage}</p>
+          <div className="flex flex-wrap gap-2">
+            {shown.map((l) => {
+              const selected = language === l.code;
+              return (
+                <button
+                  key={l.code}
+                  onClick={() => selectLang(l.code)}
+                  className={`px-4 py-2 rounded-full text-base font-semibold border transition-colors ${
+                    selected
+                      ? 'bg-patient-ink text-white border-patient-ink'
+                      : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/60'
+                  }`}
+                >
+                  {l.nativeLabel}
+                </button>
+              );
+            })}
+            {!showAllLangs && more > 0 && (
+              <button
+                onClick={() => setShowAllLangs(true)}
+                className="px-4 py-2 rounded-full text-base font-medium border border-patient-border text-patient-muted hover:border-patient-accent/60"
+              >
+                +{more} more
+              </button>
+            )}
           </div>
-          <h1 className={`text-3xl font-bold mb-2 ${isHindi ? 'hindi' : ''}`}>
-            {clinic?.name || 'Clinic'}
-          </h1>
-          <p className={`text-patient-muted ${isHindi ? 'hindi' : ''}`}>{s.checkInSubtitle}</p>
+          <p className="text-sm text-patient-muted mt-3">
+            {isHindi
+              ? 'आप बीच में अंग्रेज़ी शब्द भी बोल सकते हैं — हम समझ लेंगे।'
+              : 'You can mix English words freely — we understand.'}
+          </p>
         </div>
 
-        {/* Language selector — the ONE place it appears */}
-        <Card className="w-full bg-patient-card border-patient-border mb-8">
-          <CardContent className="p-6">
-            <p className="mono-tag text-patient-muted mb-4">{s.selectLanguage}</p>
-            <div className="grid grid-cols-2 gap-3">
-              {AVAILABLE_LANGUAGES.map((lang) => {
-                const selected = language === lang.code;
-                return (
-                  <button
-                    key={lang.code}
-                    onClick={() => handleLanguageSelect(lang.code)}
-                    className={`h-16 rounded-xl text-lg font-semibold border-2 transition-all duration-200 ${
-                      selected
-                        ? 'bg-patient-accent text-white border-patient-accent shadow-md'
-                        : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/50'
-                    }`}
-                  >
-                    <span className="block">{lang.nativeLabel}</span>
-                    {lang.nativeLabel !== lang.label && (
-                      <span className="block text-xs mt-0.5 opacity-70">{lang.label}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Phone */}
+        <label className="mt-8 block">
+          <div className="flex items-center rounded-xl border border-patient-border bg-patient-card h-14 px-4 focus-within:border-patient-accent transition-colors">
+            <span className="text-patient-muted font-medium mr-2">+91</span>
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="98765 43210"
+              className="flex-1 bg-transparent text-[17px] text-patient-ink outline-none placeholder:text-patient-muted/50"
+            />
+          </div>
+        </label>
 
-        <Button
-          className="w-full h-14 bg-patient-accent hover:bg-patient-accent/90 text-white text-lg font-bold rounded-full"
-          onClick={handleStart}
-        >
-          {s.getStarted}
-        </Button>
-
-        <p className={`mt-6 text-sm text-patient-muted ${isHindi ? 'hindi' : ''}`}>
-          {s.privacyNote}
-        </p>
+        <div className="mt-8">
+          <Button
+            className={`w-full h-14 bg-patient-accent hover:bg-patient-accent/90 text-white text-lg font-bold rounded-full ${isHindi ? 'hindi' : ''}`}
+            onClick={handleStart}
+          >
+            {isHindi ? 'आगे बढ़ें →' : `${s.getStarted} →`}
+          </Button>
+          <p className="mono-tag text-patient-muted text-[10px] text-center mt-4">
+            OTP CONFIRMS YOUR IDENTITY · NO PASSWORD
+          </p>
+        </div>
       </div>
     </PatientLayout>
   );

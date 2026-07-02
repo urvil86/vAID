@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import PatientLayout from '@/components/PatientLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Mic, RotateCcw, Loader2, WifiOff, Keyboard } from 'lucide-react';
+import { Mic, RotateCcw, Loader2, WifiOff, Keyboard, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getStrings, LANG_STORAGE_KEY } from '@/lib/i18n';
@@ -450,23 +450,40 @@ export default function PatientIntakePage() {
           </div>
         )}
 
-        {/* Progress bar */}
-        <div className="flex gap-1.5 mb-6 justify-center">
-          {questions.map((_, i) => (
-            <div
-              key={i}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                i === currentStep
-                  ? 'w-6 bg-patient-accent'
-                  : i < currentStep
-                    ? 'w-2 bg-patient-accent/40'
-                    : 'w-2 bg-patient-border'
-              }`}
-            />
-          ))}
+        {/* Token + progress */}
+        <div className="flex items-center justify-between mb-5">
+          <p className="mono-tag text-patient-muted text-[10px]">{isHindi ? 'इन्टेक' : 'INTAKE'}</p>
+          <p className="mono-tag text-patient-accent text-[10px]">
+            {isHindi
+              ? `प्रश्न ${currentStep + 1} / ${questions.length}`
+              : `QUESTION ${currentStep + 1} / ${questions.length}`}
+          </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto pb-2">
+        <div className="flex-1 overflow-y-auto pb-2 flex gap-4">
+          {/* Vertical thread — the intake progresses down the questions */}
+          <div className="flex flex-col items-center shrink-0 pt-2">
+            {questions.map((_, i) => (
+              <div key={i} className="flex flex-col items-center">
+                <span
+                  className={`rounded-full transition-all ${
+                    i < currentStep
+                      ? 'w-2.5 h-2.5 bg-patient-accent'
+                      : i === currentStep
+                        ? 'w-3.5 h-3.5 border-2 border-patient-accent bg-patient-bg'
+                        : 'w-2 h-2 bg-patient-border'
+                  }`}
+                />
+                {i < questions.length - 1 && (
+                  <span
+                    className={`w-0.5 h-6 ${i < currentStep ? 'bg-patient-accent/50' : 'bg-patient-border'}`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={`${currentStep}-${inFollowup ? 'fu' : 'q'}`}
@@ -478,15 +495,18 @@ export default function PatientIntakePage() {
             >
               {/* Question (or adaptive follow-up) */}
               <div className="space-y-1.5">
-                {!inFollowup && (
-                  <p className="mono-tag text-patient-muted">
-                    {s.questionLabel(currentStep + 1, questions.length)}
-                  </p>
+                {inFollowup ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-patient-accent/40 text-patient-accent mono-tag text-[10px]">
+                    <Sparkles className="w-3 h-3" /> {isHindi ? 'AI · एक छोटा सवाल' : 'AI · ONE SMALL QUESTION'}
+                  </span>
+                ) : (
+                  language !== 'English' &&
+                  question.hint && <p className="mono-tag text-patient-muted text-[10px]">{question.hint}</p>
                 )}
                 <h2 className={`text-2xl font-bold leading-snug ${isHindi ? 'hindi' : ''}`}>
                   {headingText}
                 </h2>
-                {!inFollowup && language !== 'English' && question.hint && (
+                {!inFollowup && language === 'English' && question.hint && (
                   <p className="text-patient-muted text-base">{question.hint}</p>
                 )}
               </div>
@@ -590,6 +610,7 @@ export default function PatientIntakePage() {
               )}
             </motion.div>
           </AnimatePresence>
+          </div>
         </div>
 
         {/* Bottom actions */}

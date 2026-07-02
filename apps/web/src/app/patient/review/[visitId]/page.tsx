@@ -252,8 +252,11 @@ export default function PatientReviewPage() {
             disabled={saving}
             className={`w-full h-14 bg-patient-accent hover:bg-patient-accent/90 text-white text-lg font-bold rounded-full disabled:opacity-60 ${isHindi ? 'hindi' : ''}`}
           >
-            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : s.confirmButton}
+            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : `${s.confirmButton} →`}
           </Button>
+          <p className={`text-center text-sm text-patient-muted mt-3 ${isHindi ? 'hindi' : ''}`}>
+            {isHindi ? 'कुछ बदलना है? ऊपर सीधे ठीक करें।' : 'Want to change something? Edit it above.'}
+          </p>
         </div>
       </div>
     </PatientLayout>
