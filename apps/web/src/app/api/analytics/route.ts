@@ -113,6 +113,17 @@ export async function GET(request: Request) {
       FROM ai_usage WHERE clinic_id = ${clinicId}
     `;
 
+    // Visits/day for the last 7 days (bar chart).
+    const visitsPerDay = (await sql`
+      SELECT to_char(d.day, 'Dy') AS label, coalesce(c.n, 0)::int AS count
+      FROM generate_series(current_date - 6, current_date, interval '1 day') AS d(day)
+      LEFT JOIN (
+        SELECT created_at::date AS day, count(*) AS n
+        FROM visits WHERE clinic_id = ${clinicId} GROUP BY created_at::date
+      ) c ON c.day = d.day::date
+      ORDER BY d.day
+    `) as Array<{ label: string; count: number }>;
+
     const num = (x: unknown) => (x == null ? 0 : Number(x));
     const totalVisits = num(row.total_visits);
     const consultDenom = num(row.consult_denom);
@@ -141,6 +152,7 @@ export async function GET(request: Request) {
         signedNotes: num(signStats?.signed),
         signedWithoutEdits: num(signStats?.signed_no_edits),
       },
+      visitsPerDay,
       // Pilot metrics (retention + ops)
       pilot: {
         returningWithin90dPct: num(retention?.total_patients)

@@ -18,6 +18,7 @@ type Analytics = {
   intakeBeforeRoomPct: number;
   intakeBeforeRoomCount: number;
   intakeBeforeRoomDenom: number;
+  visitsPerDay?: { label: string; count: number }[];
 };
 
 export default function ClinicAnalyticsPage() {
@@ -104,6 +105,34 @@ export default function ClinicAnalyticsPage() {
         />
         <Metric icon={<ClipboardCheck className="w-4 h-4" />} label="Visits done" value={String(data.doneVisits)} />
       </div>
+
+      {/* Visits / day */}
+      {Array.isArray(data.visitsPerDay) && data.visitsPerDay.length > 0 && (
+        <Card className="bg-doctor-raised border-doctor-muted/20 mt-4">
+          <CardContent className="p-5">
+            <p className="mono-tag text-doctor-muted text-[10px] mb-3">VISITS / DAY</p>
+            {(() => {
+              const max = Math.max(1, ...data.visitsPerDay.map((d) => d.count));
+              return (
+                <div className="flex items-end gap-2 h-24">
+                  {data.visitsPerDay.map((d, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
+                      <div className="w-full flex-1 flex items-end">
+                        <div
+                          className={`w-full rounded-sm ${i === data.visitsPerDay.length - 1 ? 'bg-doctor-accent' : 'bg-doctor-accent/25'}`}
+                          style={{ height: `${Math.max(6, (d.count / max) * 100)}%` }}
+                          title={`${d.count}`}
+                        />
+                      </div>
+                      <span className="mono-tag text-doctor-muted text-[9px]">{d.label}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-doctor-muted/70 text-xs mt-6 mono-tag">
         &ldquo;Door-to-doctor&rdquo; is check-in → seen, so it includes the time the patient

@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY } from '@/lib/i18n';
-import { Loader2, Star, Trash2, Plus, LogOut, Download } from 'lucide-react';
+import { Loader2, Star, Trash2, Plus, LogOut, Download, BadgeCheck } from 'lucide-react';
 
 type Clinic = { id: string; name: string };
 type Fav = { clinic_id: string; name: string };
@@ -203,6 +203,12 @@ export default function PatientSettingsPage() {
         <Card className="bg-patient-card border-patient-border">
           <CardContent className="p-4 space-y-3">
             <p className="mono-tag text-patient-muted text-[10px]">ACCOUNT</p>
+            <button
+              onClick={() => router.push('/patient/abdm')}
+              className="flex items-center gap-2 text-sm font-semibold text-patient-ink hover:text-patient-accent"
+            >
+              <BadgeCheck className="w-4 h-4" /> Health ID (ABHA)
+            </button>
             <button
               onClick={async () => {
                 const res = await fetch('/api/my-record');

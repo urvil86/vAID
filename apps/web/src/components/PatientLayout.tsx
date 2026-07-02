@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, LogOut, Settings } from 'lucide-react';
+import { Home, LogOut, Settings, Bell } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +21,14 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
             <span className="tracking-tight">V-Aid</span>
           </button>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/patient/notifications')}
+              className="text-patient-muted hover:text-patient-ink"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="sr-only">Notifications</span>
+            </button>
             <button
               onClick={() => router.push('/patient/settings')}
               className="text-patient-muted hover:text-patient-ink"
