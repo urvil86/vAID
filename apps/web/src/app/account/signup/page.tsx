@@ -16,9 +16,10 @@
 
 import { useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useState } from 'react';
-import { Stethoscope, Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Stethoscope, Mail, Lock, User, Eye, EyeOff, Loader2, Languages } from 'lucide-react';
 import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { authClient } from '@/lib/auth-client';
+import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY } from '@/lib/i18n';
 
 function friendlyError(message?: string | null): string | null {
   if (!message) return null;
@@ -36,6 +37,7 @@ function SignUpForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [language, setLanguage] = useState('Hindi');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +59,19 @@ function SignUpForm() {
       setError(signUpError.message ?? 'Sign up failed');
       setLoading(false);
       return;
+    }
+
+    // Persist the chosen language on the profile (and locally) so the whole
+    // patient flow uses it instead of defaulting to English.
+    try {
+      if (typeof window !== 'undefined') localStorage.setItem(LANG_STORAGE_KEY, language);
+      await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferredLanguage: language }),
+      });
+    } catch {
+      /* non-blocking */
     }
 
     if (typeof window !== 'undefined') {
@@ -97,6 +112,24 @@ function SignUpForm() {
                 placeholder="Your full name"
                 className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors"
               />
+            </div>
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-patient-ink">Preferred language</span>
+            <div className="relative">
+              <Languages className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-patient-muted z-10" />
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors appearance-none"
+              >
+                {AVAILABLE_LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label} · {l.nativeLabel}
+                  </option>
+                ))}
+              </select>
             </div>
           </label>
 

@@ -15,15 +15,13 @@ export default function RootPage() {
   const router = useRouter();
   const { data: session } = authClient.useSession();
 
-  const { data: clinics, isLoading: clinicsLoading } = useQuery({
+  const { isLoading: clinicsLoading } = useQuery({
     queryKey: ['clinics'],
     queryFn: async () => {
       const res = await fetch('/api/clinics');
       return res.json();
     },
   });
-
-  const clinicId = clinics?.[0]?.id || 'temp';
 
   // This page NEVER auto-redirects — the bare domain (vaid.vercel.app) always
   // shows the landing. Staff reach their console by tapping the card below
@@ -69,7 +67,7 @@ export default function RootPage() {
 
           <Card
             className="bg-[#fcfaf5] border-[#ece4d6] hover:border-[#d8693e] transition-colors cursor-pointer"
-            onClick={() => router.push(`/patient/check-in/${clinicId}`)}
+            onClick={() => router.push('/patient/check-in')}
           >
             <CardContent className="p-6 flex items-center gap-4">
               <div className="bg-[#d8693e]/10 p-3 rounded-full text-[#d8693e]">

@@ -97,7 +97,13 @@ export default function PatientHistoryPage() {
         {list.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 text-patient-muted">
             <FileText className="w-10 h-10" />
-            <p>No visits yet. Scan your clinic&apos;s QR code to check in.</p>
+            <p>No visits yet. Scan your clinic&apos;s QR code, or start below.</p>
+            <Button
+              onClick={() => router.push('/patient/check-in')}
+              className="h-12 px-6 bg-patient-accent hover:bg-patient-accent/90 text-white font-bold rounded-full"
+            >
+              Start check-in
+            </Button>
           </div>
         ) : (
           <div className="space-y-3 flex-1 overflow-y-auto pb-6">

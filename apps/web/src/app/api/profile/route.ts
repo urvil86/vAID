@@ -20,11 +20,13 @@ export async function GET(request: Request) {
   let row;
   try {
     [row] = await sql`
-      SELECT user_id, date_of_birth, sex, abha_id, uhid
-      FROM patient_profiles WHERE user_id = ${target}
+      SELECT pp.user_id, pp.date_of_birth, pp.sex, pp.abha_id, pp.uhid,
+             pp.preferred_language, u.name
+      FROM patient_profiles pp JOIN "user" u ON u.id = pp.user_id
+      WHERE pp.user_id = ${target}
     `;
   } catch {
-    // uhid column not migrated yet — fall back so reads never 500.
+    // newer columns not migrated yet — fall back so reads never 500.
     [row] = await sql`
       SELECT user_id, date_of_birth, sex, abha_id
       FROM patient_profiles WHERE user_id = ${target}
@@ -44,16 +46,25 @@ export async function PUT(request: Request) {
   const abha = (typeof body.abhaId === 'string' ? body.abhaId.trim() : '') || null;
   const dob = body.dateOfBirth || null;
   const sex = body.sex || null;
+  const lang = typeof body.preferredLanguage === 'string' && body.preferredLanguage.trim()
+    ? body.preferredLanguage.trim()
+    : null;
+  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : null;
 
   try {
+    // Name lives on the auth user; update it when provided.
+    if (name) {
+      await sql`UPDATE "user" SET name = ${name} WHERE id = ${ctx.userId}`;
+    }
     const [row] = await sql`
-      INSERT INTO patient_profiles (user_id, abha_id, date_of_birth, sex)
-      VALUES (${ctx.userId}, ${abha}, ${dob}, ${sex})
+      INSERT INTO patient_profiles (user_id, abha_id, date_of_birth, sex, preferred_language)
+      VALUES (${ctx.userId}, ${abha}, ${dob}, ${sex}, ${lang})
       ON CONFLICT (user_id) DO UPDATE SET
-        abha_id       = COALESCE(${abha}, patient_profiles.abha_id),
-        date_of_birth = COALESCE(${dob}, patient_profiles.date_of_birth),
-        sex           = COALESCE(${sex}, patient_profiles.sex)
-      RETURNING user_id, date_of_birth, sex, abha_id
+        abha_id            = COALESCE(${abha}, patient_profiles.abha_id),
+        date_of_birth      = COALESCE(${dob}, patient_profiles.date_of_birth),
+        sex                = COALESCE(${sex}, patient_profiles.sex),
+        preferred_language = COALESCE(${lang}, patient_profiles.preferred_language)
+      RETURNING user_id, date_of_birth, sex, abha_id, preferred_language
     `;
     await audit(request, ctx, 'update', 'patient_profile', ctx.userId);
 

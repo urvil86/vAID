@@ -20,10 +20,25 @@ export default function PatientCheckInPage() {
   const [language, setLanguage] = useState('Hindi');
   const { data: session } = authClient.useSession();
 
-  // Restore last-used language from storage
+  // Restore last-used language from storage; otherwise fall back to the
+  // patient's saved preferred language (set at signup / in settings).
   useEffect(() => {
     const saved = localStorage.getItem(LANG_STORAGE_KEY);
-    if (saved) setLanguage(saved);
+    if (saved) {
+      setLanguage(saved);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch('/api/profile');
+        if (res.ok) {
+          const lang = (await res.json())?.profile?.preferred_language;
+          if (lang) setLanguage(lang);
+        }
+      } catch {
+        /* keep default */
+      }
+    })();
   }, []);
 
   const s = getStrings(language);

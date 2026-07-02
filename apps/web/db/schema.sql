@@ -190,7 +190,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS patient_profiles_abha_uniq
 -- ABDM verification (3.3) + family accounts. abha_verified is set once the ABDM
 -- sandbox confirms the number/address. One phone => one account with multiple
 -- patient_profiles (relationship + managed_by point at the primary profile).
+ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS preferred_language text;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS abha_verified boolean NOT NULL DEFAULT false;
+
+-- Patient's favourite clinics (quick no-QR check-in).
+CREATE TABLE IF NOT EXISTS patient_favorites (
+  patient_id text NOT NULL,
+  clinic_id  uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (patient_id, clinic_id)
+);
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS abha_verified_at timestamptz;
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS relationship text DEFAULT 'self';
 ALTER TABLE patient_profiles ADD COLUMN IF NOT EXISTS managed_by text;

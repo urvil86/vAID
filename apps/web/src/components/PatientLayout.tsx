@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Home, LogOut } from 'lucide-react';
+import { Home, LogOut, Settings } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
 export default function PatientLayout({ children }: { children: React.ReactNode }) {
@@ -20,17 +20,27 @@ export default function PatientLayout({ children }: { children: React.ReactNode 
             <Home className="w-4 h-4 text-patient-accent" />
             <span className="tracking-tight">V-Aid</span>
           </button>
-          <button
-            onClick={async () => {
-              await authClient.signOut();
-              router.push('/');
-            }}
-            className="flex items-center gap-1 text-patient-muted text-sm hover:text-patient-ink"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="sr-only">Sign out</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/patient/settings')}
+              className="text-patient-muted hover:text-patient-ink"
+              title="Settings"
+            >
+              <Settings className="w-4 h-4" />
+              <span className="sr-only">Settings</span>
+            </button>
+            <button
+              onClick={async () => {
+                await authClient.signOut();
+                router.push('/');
+              }}
+              className="flex items-center gap-1 text-patient-muted text-sm hover:text-patient-ink"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="sr-only">Sign out</span>
+            </button>
+          </div>
         </header>
         {children}
       </div>
