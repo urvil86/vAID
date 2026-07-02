@@ -148,15 +148,15 @@ export default function LandingPage() {
 
   const c = { ...COPY[lang].shared, ...COPY[lang][audience] };
 
-  const goDoctor = () => {
+  // "Book a demo" / "Get early access" send everyone to the account chooser,
+  // where they pick Doctor/Clinic vs Patient before signing in or up. Staff who
+  // are already signed in (or dev-bypass) skip straight to the console.
+  const primaryCta = () => {
     const role = (session?.user as { role?: string } | undefined)?.role;
     const isStaff = !!role && STAFF_ROLES.includes(role);
     if (DEV_AUTH_BYPASS || isStaff) router.push('/clinic/queue');
-    else router.push('/account/signin?callbackUrl=/clinic/queue');
+    else router.push('/account/choose');
   };
-  const goPatient = () => router.push('/patient/check-in');
-  // Primary CTA routes by the audience currently selected in the hero.
-  const primaryCta = () => (audience === 'doc' ? goDoctor() : goPatient());
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   // Font stacks (loaded globally via global.css @import).
