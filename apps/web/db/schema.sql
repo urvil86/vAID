@@ -396,6 +396,16 @@ CREATE TABLE IF NOT EXISTS vitals (
 );
 CREATE INDEX IF NOT EXISTS idx_vitals_visit ON vitals (visit_id);
 
+-- Custom/extra vitals the doctor adds beyond the fixed columns above, kept as
+-- an array of {label, value, unit} so any measurement can be recorded.
+ALTER TABLE vitals ADD COLUMN IF NOT EXISTS extra_json jsonb;
+
+-- Ambient consult scribe (doctor side): the consult conversation is transcribed
+-- in-browser, structured into English EMR here, and only the STRUCTURED result
+-- is stored — never the raw audio/transcript (deleted once the note is saved).
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS consult_note_json jsonb;
+ALTER TABLE intake_sessions ADD COLUMN IF NOT EXISTS consult_recorded_at timestamptz;
+
 -- Expiring share links for prescriptions. A random 128-bit token resolves to a
 -- prescription for a limited window (public /rx/[token] view). Raw-UUID
 -- prescription URLs are no longer publicly resolvable.

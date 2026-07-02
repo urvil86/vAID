@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, Plus, Loader2 } from 'lucide-react';
+import { Activity, Plus, Loader2, X } from 'lucide-react';
 import { abnormalVitals } from '@/data/clinical-thresholds';
+
+type ExtraVital = { label: string; value: string; unit?: string };
 
 const FIELDS = [
   { key: 'systolic_bp', label: 'Sys', unit: '' },
@@ -24,6 +26,7 @@ export default function VitalsPanel({ visitId }: { visitId: string }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [customs, setCustoms] = useState<ExtraVital[]>([]);
 
   const { data } = useQuery({
     queryKey: ['vitals', visitId],
@@ -41,6 +44,10 @@ export default function VitalsPanel({ visitId }: { visitId: string }) {
         const val = form[f.key]?.trim();
         if (val) body[f.key] = Number(val);
       }
+      const extra = customs
+        .map((c) => ({ label: c.label.trim(), value: c.value.trim(), unit: (c.unit || '').trim() }))
+        .filter((c) => c.label && c.value);
+      if (extra.length) body.extra = extra;
       const res = await fetch('/api/vitals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,6 +61,7 @@ export default function VitalsPanel({ visitId }: { visitId: string }) {
     onSuccess: () => {
       setAdding(false);
       setForm({});
+      setCustoms([]);
       qc.invalidateQueries({ queryKey: ['vitals', visitId] });
     },
   });
@@ -87,9 +95,18 @@ export default function VitalsPanel({ visitId }: { visitId: string }) {
                 {f.unit}
               </span>
             ))}
-            {FIELDS.every((f) => latest[f.key] == null) && (
-              <span className="text-doctor-muted text-sm">—</span>
-            )}
+            {Array.isArray(latest.extra_json) &&
+              (latest.extra_json as unknown as ExtraVital[]).map((c, i) => (
+                <span key={`x-${i}`} className="text-sm text-doctor-text">
+                  <span className="text-doctor-muted text-xs">{c.label} </span>
+                  {c.value}
+                  {c.unit || ''}
+                </span>
+              ))}
+            {FIELDS.every((f) => latest[f.key] == null) &&
+              !(Array.isArray(latest.extra_json) && latest.extra_json.length) && (
+                <span className="text-doctor-muted text-sm">—</span>
+              )}
           </div>
         )}
         {!adding && !latest && <p className="text-doctor-muted text-sm">No vitals recorded.</p>}
@@ -115,6 +132,53 @@ export default function VitalsPanel({ visitId }: { visitId: string }) {
                 </label>
               ))}
             </div>
+            {/* Custom vitals — any measurement beyond the fixed set */}
+            {customs.length > 0 && (
+              <div className="space-y-2">
+                {customs.map((c, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 items-center">
+                    <input
+                      placeholder="Label (e.g. Pain score)"
+                      value={c.label}
+                      onChange={(e) =>
+                        setCustoms((cs) => cs.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
+                      }
+                      className="bg-doctor-bg border border-doctor-muted/20 rounded px-2 py-1 text-sm text-doctor-text outline-none focus:border-doctor-accent"
+                    />
+                    <input
+                      placeholder="Value"
+                      value={c.value}
+                      onChange={(e) =>
+                        setCustoms((cs) => cs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))
+                      }
+                      className="bg-doctor-bg border border-doctor-muted/20 rounded px-2 py-1 text-sm text-doctor-text outline-none focus:border-doctor-accent"
+                    />
+                    <input
+                      placeholder="Unit"
+                      value={c.unit || ''}
+                      onChange={(e) =>
+                        setCustoms((cs) => cs.map((x, j) => (j === i ? { ...x, unit: e.target.value } : x)))
+                      }
+                      className="w-16 bg-doctor-bg border border-doctor-muted/20 rounded px-2 py-1 text-sm text-doctor-text outline-none focus:border-doctor-accent"
+                    />
+                    <button
+                      onClick={() => setCustoms((cs) => cs.filter((_, j) => j !== i))}
+                      className="text-doctor-muted hover:text-red-400"
+                      aria-label="Remove field"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setCustoms((cs) => [...cs, { label: '', value: '', unit: '' }])}
+              className="flex items-center gap-1.5 text-doctor-accent text-xs font-semibold hover:underline"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add another vital
+            </button>
+
             <div className="flex items-center gap-2 justify-end">
               {save.isError && (
                 <span className="text-red-400 text-xs mr-auto">{(save.error as Error).message}</span>

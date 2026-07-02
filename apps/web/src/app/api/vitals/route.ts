@@ -22,6 +22,17 @@ const vitalsSchema = z
     weight_kg: inRange(R.weight_kg.min, R.weight_kg.max),
     height_cm: inRange(R.height_cm.min, R.height_cm.max),
     glucose_mgdl: inRange(R.glucose_mgdl.min, R.glucose_mgdl.max),
+    // Custom vitals the doctor adds beyond the fixed set (free label/value/unit).
+    extra: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(40),
+          value: z.string().trim().min(1).max(40),
+          unit: z.string().trim().max(20).optional(),
+        })
+      )
+      .max(20)
+      .optional(),
   })
   .strip();
 
@@ -58,16 +69,17 @@ export async function POST(request: Request) {
   const [visit] = await sql`SELECT patient_id FROM visits WHERE id = ${v.visitId}`;
   if (!visit) return Response.json({ error: 'Visit not found' }, { status: 404 });
 
+  const extra = v.extra && v.extra.length ? JSON.stringify(v.extra) : null;
   const [row] = await sql`
     INSERT INTO vitals (
       visit_id, patient_id, recorded_by, entry_source,
       systolic_bp, diastolic_bp, heart_rate, temperature_c, resp_rate, spo2,
-      weight_kg, height_cm, glucose_mgdl
+      weight_kg, height_cm, glucose_mgdl, extra_json
     ) VALUES (
       ${v.visitId}, ${visit.patient_id}, ${recordedBy}, ${entrySource},
       ${v.systolic_bp ?? null}, ${v.diastolic_bp ?? null}, ${v.heart_rate ?? null},
       ${v.temperature_c ?? null}, ${v.resp_rate ?? null}, ${v.spo2 ?? null},
-      ${v.weight_kg ?? null}, ${v.height_cm ?? null}, ${v.glucose_mgdl ?? null}
+      ${v.weight_kg ?? null}, ${v.height_cm ?? null}, ${v.glucose_mgdl ?? null}, ${extra}
     )
     RETURNING *
   `;
