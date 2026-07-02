@@ -20,7 +20,7 @@ export default function PatientSuccessPage() {
   const isHindi = language === 'Hindi';
 
   return (
-    <PatientLayout>
+    <PatientLayout backHref="/patient/history">
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <CheckCircle2 className="w-20 h-20 text-green-500 mb-6" />
         <h1 className={`text-3xl font-bold mb-3 ${isHindi ? 'hindi' : ''}`}>{s.successHeading}</h1>

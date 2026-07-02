@@ -53,7 +53,7 @@ export default function PatientHistoryPage() {
 
   if (isPending || (patientId && isLoading)) {
     return (
-      <PatientLayout>
+      <PatientLayout showBack={false}>
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-patient-accent w-6 h-6" />
         </div>
