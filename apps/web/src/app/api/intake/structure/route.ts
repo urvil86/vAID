@@ -7,6 +7,7 @@ import { enforceRateLimit, getClientIp } from '@/lib/rate-limit';
 import { writeNoteVersion } from '@/lib/note-lifecycle';
 import { validateStructuredNote } from '@/lib/validation/structured-note';
 import { applyGrounding } from '@/lib/grounding';
+import { overDailyBudget, recordAiSpend } from '@/lib/ai-cost';
 
 // Instruction shared by every LLM-backed structuring path. Written to be
 // multilingual: patients in India answer in Hindi, English, or any other major
@@ -218,6 +219,12 @@ export async function POST(request: Request) {
     const transcript: string = session.transcript_native;
     const language: string | undefined = session.language;
 
+    // AI cost control (3.4): over the clinic's daily AI budget → local tier only
+    // (never blocks intake; the admin dashboard shows a banner).
+    const [vrow] = await sql`SELECT clinic_id FROM visits WHERE id = ${session.visit_id}`;
+    const clinicId = (vrow?.clinic_id as string) || null;
+    const budgetExceeded = await overDailyBudget(clinicId);
+
     // Preference order: OpenRouter (cheap multilingual) → platform → local.
     // Each tier's output is VALIDATED against the strict note schema; an invalid
     // note degrades to the next tier rather than reaching the record. A 25s
@@ -233,7 +240,7 @@ export async function POST(request: Request) {
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error('structuring timeout')), ms)),
       ]);
 
-    if (!thirdPartyDisabled) {
+    if (!thirdPartyDisabled && !budgetExceeded) {
       const tiers = [
         ['openrouter', () => structureViaOpenRouter(transcript, language)],
         ['platform', () => structureViaPlatform(transcript)],
@@ -262,6 +269,11 @@ export async function POST(request: Request) {
       const v = validateStructuredNote(local);
       structuredNote = (v.ok ? v.note : local) as StructuredNote;
       structuringSource = 'local';
+    }
+
+    // Record AI spend for the clinic's daily budget (rough per-call estimate).
+    if (structuringSource !== 'local') {
+      await recordAiSpend(clinicId, 0.002);
     }
 
     // Grounding: FLAG (never delete) any medication/allergy not traceable to the

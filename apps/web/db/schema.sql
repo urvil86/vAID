@@ -379,6 +379,18 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_share_tokens_rx ON share_tokens (prescription_id);
 
+-- Ops (3.4): per-clinic daily AI spend (cost controls) + cold audit archive +
+-- consent soft-delete (30-day recovery window before hard purge).
+CREATE TABLE IF NOT EXISTS ai_usage (
+  clinic_id text NOT NULL,
+  day       date NOT NULL DEFAULT current_date,
+  calls     integer NOT NULL DEFAULT 0,
+  spend_usd numeric NOT NULL DEFAULT 0,
+  PRIMARY KEY (clinic_id, day)
+);
+CREATE TABLE IF NOT EXISTS audit_log_archive (LIKE audit_log INCLUDING ALL);
+ALTER TABLE consent ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+
 -- Fixed-window rate-limit counters (Postgres-backed; see src/lib/rate-limit.ts).
 -- Neon-serverless friendly: no Redis assumed. Expired windows are swept
 -- opportunistically on write.
