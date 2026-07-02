@@ -101,28 +101,57 @@ export default function PatientHistoryPage() {
           </div>
         ) : (
           <div className="space-y-3 flex-1 overflow-y-auto pb-6">
-            {list.map((v) => (
-              <Card key={v.id} className="bg-patient-card border-patient-border">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="mono-tag text-patient-muted text-[10px]">
-                      {v.token_no} · {v.clinic_name || 'Clinic'}
+            {list.map((v) => {
+              // A visit still in intake is resumable; a completed intake goes to
+              // the review screen. Later stages (consult/done) are view-only.
+              const resumeIntake = v.status === 'INTAKE IN PROGRESS' || v.status === 'CHECKED IN';
+              const toReview = v.status === 'INTAKE COMPLETE';
+              const clickable = resumeIntake || toReview;
+              const go = () => {
+                if (resumeIntake) router.push(`/patient/intake/${v.id}`);
+                else if (toReview) router.push(`/patient/review/${v.id}`);
+              };
+              return (
+                <Card
+                  key={v.id}
+                  onClick={clickable ? go : undefined}
+                  className={`bg-patient-card border-patient-border ${
+                    clickable ? 'cursor-pointer hover:border-patient-accent transition-colors' : ''
+                  }`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="mono-tag text-patient-muted text-[10px]">
+                        {v.token_no} · {v.clinic_name || 'Clinic'}
+                      </p>
+                      <span className="mono-tag text-[10px] text-patient-accent">{v.status}</span>
+                    </div>
+                    <p className="font-bold text-patient-ink">
+                      {v.structured_note_json?.chief_complaint || 'Intake recorded'}
                     </p>
-                    <span className="mono-tag text-[10px] text-patient-accent">{v.status}</span>
-                  </div>
-                  <p className="font-bold text-patient-ink">
-                    {v.structured_note_json?.chief_complaint || 'Intake recorded'}
-                  </p>
-                  <p className="text-patient-muted text-xs mt-1" suppressHydrationWarning>
-                    {new Date(v.created_at).toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-patient-muted text-xs" suppressHydrationWarning>
+                        {new Date(v.created_at).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </p>
+                      {resumeIntake && (
+                        <span className="text-xs font-semibold text-patient-accent">
+                          Tap to resume →
+                        </span>
+                      )}
+                      {toReview && (
+                        <span className="text-xs font-semibold text-patient-accent">
+                          Review &amp; submit →
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

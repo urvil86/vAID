@@ -1,8 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
-import { Activity, Pill, AlertTriangle } from 'lucide-react';
+import { Activity, Pill, AlertTriangle, X } from 'lucide-react';
 
 type Summary = {
   problems: { problem: string; last_seen: string; visits: number }[];
@@ -22,6 +22,7 @@ export default function PatientSummaryCard({
   patientId: string;
   variant: 'doctor' | 'patient';
 }) {
+  const qc = useQueryClient();
   const { data } = useQuery<Summary | null>({
     queryKey: ['patient-summary', patientId],
     queryFn: async () => {
@@ -30,6 +31,17 @@ export default function PatientSummaryCard({
       return (await res.json()).summary;
     },
     enabled: !!patientId,
+  });
+
+  const resolve = useMutation({
+    mutationFn: async (problem: string) => {
+      await fetch('/api/patient-summary/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ problem, patientId }),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['patient-summary', patientId] }),
   });
 
   if (!data) return null;
@@ -58,9 +70,21 @@ export default function PatientSummaryCard({
             </p>
             <div className="flex flex-wrap gap-2">
               {data.problems.map((p, i) => (
-                <span key={i} className={`text-sm ${textCls} ${chipCls} rounded-full px-3 py-1`}>
+                <span
+                  key={i}
+                  className={`inline-flex items-center gap-1.5 text-sm ${textCls} ${chipCls} rounded-full pl-3 pr-2 py-1`}
+                >
                   {p.problem}
                   {p.visits > 1 ? ` · ${p.visits}×` : ''}
+                  <button
+                    onClick={() => resolve.mutate(p.problem)}
+                    disabled={resolve.isPending}
+                    title="Mark resolved"
+                    aria-label={`Mark ${p.problem} resolved`}
+                    className="opacity-50 hover:opacity-100 disabled:opacity-30"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </span>
               ))}
             </div>

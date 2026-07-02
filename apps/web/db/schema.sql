@@ -305,6 +305,15 @@ CREATE TABLE IF NOT EXISTS allergy_intolerances (
 );
 CREATE INDEX IF NOT EXISTS idx_allergy_patient ON allergy_intolerances (patient_id);
 
+-- Problems the patient/doctor marked resolved, so they stop appearing as active
+-- in the rolled-up summary (note-derived problems have no coded status).
+CREATE TABLE IF NOT EXISTS resolved_problems (
+  patient_id   text NOT NULL,
+  problem_norm text NOT NULL,
+  resolved_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (patient_id, problem_norm)
+);
+
 -- Rolled-up longitudinal summary, regenerated when a consult closes. Carries
 -- the patient's problems, current medications and allergies forward across
 -- visits so the doctor gets glance-value instead of a stack of cards.

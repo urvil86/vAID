@@ -106,6 +106,19 @@ export async function regeneratePatientSummary(patientId: string): Promise<Patie
     /* coded tables not migrated yet — fall back to the note aggregation */
   }
 
+  // Drop problems the patient/doctor marked resolved.
+  try {
+    const resolved = (await sql`
+      SELECT problem_norm FROM resolved_problems WHERE patient_id = ${patientId}
+    `) as Array<{ problem_norm: string }>;
+    const resolvedSet = new Set(resolved.map((r) => r.problem_norm));
+    for (const key of [...problemMap.keys()]) {
+      if (resolvedSet.has(key)) problemMap.delete(key);
+    }
+  } catch {
+    /* table not migrated yet */
+  }
+
   const summary: PatientSummary = {
     problems: [...problemMap.values()],
     medications: dedupeStrings(meds),
