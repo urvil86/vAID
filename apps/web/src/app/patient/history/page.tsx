@@ -7,8 +7,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, FileText, BadgeCheck, ExternalLink } from 'lucide-react';
+import { Loader2, FileText, BadgeCheck, ExternalLink, Plus } from 'lucide-react';
 import PatientSummaryCard from '@/components/PatientSummaryCard';
+import { downloadRecordPdf } from '@/lib/record-pdf';
 
 type PatientVisit = {
   id: string;
@@ -72,23 +73,22 @@ export default function PatientHistoryPage() {
             <h1 className="text-2xl font-bold text-patient-ink">Visit history</h1>
           </div>
           <button
-            onClick={async () => {
-              const res = await fetch('/api/my-record');
-              if (!res.ok) return;
-              const data = await res.json();
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `my-vaid-record.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
+            onClick={() => void downloadRecordPdf()}
             className="text-sm font-semibold text-patient-accent hover:underline whitespace-nowrap"
           >
             Download my record
           </button>
         </div>
+
+        {/* Start another visit — always available once a patient has history. */}
+        {list.length > 0 && (
+          <Button
+            onClick={() => router.push('/patient/check-in')}
+            className="w-full h-12 mb-5 bg-patient-accent hover:bg-patient-accent/90 text-white font-bold rounded-full flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5" /> New check-in
+          </Button>
+        )}
 
         <AbhaCard initial={profile?.abha_id || ''} uhid={profile?.uhid || ''} />
 
