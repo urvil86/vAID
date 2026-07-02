@@ -232,4 +232,14 @@ export const AVAILABLE_LANGUAGES: { code: string; label: string; nativeLabel: st
   { code: 'Urdu', label: 'Urdu', nativeLabel: 'اردو' },
 ];
 
+// Only Hindi and English are wired end-to-end today (translated questions,
+// speech locale, and note translation). The rest are shown but disabled in the
+// pickers until their pipeline is validated, so nobody selects a half-working
+// language mid-consult.
+export const ENABLED_LANGUAGES = ['Hindi', 'English'];
+export const isLanguageEnabled = (code: string) => ENABLED_LANGUAGES.includes(code);
+
 export const LANG_STORAGE_KEY = 'vaid-patient-language';
+
+// A patient's phone, remembered across check-ins so they don't retype it.
+export const PHONE_STORAGE_KEY = 'vaid-patient-phone';

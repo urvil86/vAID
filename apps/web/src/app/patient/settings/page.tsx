@@ -7,11 +7,14 @@ import PatientLayout from '@/components/PatientLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
-import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY } from '@/lib/i18n';
+import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY, isLanguageEnabled } from '@/lib/i18n';
+import { downloadRecordPdf } from '@/lib/record-pdf';
 import { Loader2, Star, Trash2, Plus, LogOut, Download, BadgeCheck } from 'lucide-react';
 
 type Clinic = { id: string; name: string };
 type Fav = { clinic_id: string; name: string };
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 export default function PatientSettingsPage() {
   const router = useRouter();
@@ -43,25 +46,38 @@ export default function PatientSettingsPage() {
   });
 
   const [name, setName] = useState('');
-  const [dob, setDob] = useState('');
+  // DOB is captured as day / month / year (Indian date order) and composed
+  // into an ISO date only on save.
+  const [dobD, setDobD] = useState('');
+  const [dobM, setDobM] = useState('');
+  const [dobY, setDobY] = useState('');
   const [sex, setSex] = useState('');
   const [lang, setLang] = useState('Hindi');
   const [saved, setSaved] = useState(false);
+  const [addSel, setAddSel] = useState('');
 
   useEffect(() => {
     if (!profile) return;
     setName(profile.name || '');
-    setDob(profile.date_of_birth ? String(profile.date_of_birth).slice(0, 10) : '');
+    const iso = profile.date_of_birth ? String(profile.date_of_birth).slice(0, 10) : '';
+    const [y, m, d] = iso ? iso.split('-') : ['', '', ''];
+    setDobY(y || '');
+    setDobM(m ? String(Number(m)) : '');
+    setDobD(d ? String(Number(d)) : '');
     setSex(profile.sex || '');
     setLang(profile.preferred_language || 'Hindi');
   }, [profile]);
 
   const saveProfile = useMutation({
     mutationFn: async () => {
+      const dob =
+        dobY && dobM && dobD
+          ? `${dobY}-${dobM.padStart(2, '0')}-${dobD.padStart(2, '0')}`
+          : null;
       await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, dateOfBirth: dob || null, sex: sex || null, preferredLanguage: lang }),
+        body: JSON.stringify({ name, dateOfBirth: dob, sex: sex || null, preferredLanguage: lang }),
       });
       if (typeof window !== 'undefined') localStorage.setItem(LANG_STORAGE_KEY, lang);
     },
@@ -122,10 +138,31 @@ export default function PatientSettingsPage() {
               <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
             </label>
             <div className="grid grid-cols-2 gap-3">
-              <label className="block space-y-1">
+              <div className="block space-y-1">
                 <span className="text-sm font-medium text-patient-ink">Date of birth</span>
-                <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputCls} />
-              </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <select value={dobD} onChange={(e) => setDobD(e.target.value)} className={inputCls} aria-label="Day">
+                    <option value="">Day</option>
+                    {Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <select value={dobM} onChange={(e) => setDobM(e.target.value)} className={inputCls} aria-label="Month">
+                    <option value="">Month</option>
+                    {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(
+                      (label, i) => (
+                        <option key={label} value={String(i + 1)}>{label}</option>
+                      )
+                    )}
+                  </select>
+                  <select value={dobY} onChange={(e) => setDobY(e.target.value)} className={inputCls} aria-label="Year">
+                    <option value="">Year</option>
+                    {Array.from({ length: 110 }, (_, i) => String(CURRENT_YEAR - i)).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <label className="block space-y-1">
                 <span className="text-sm font-medium text-patient-ink">Sex</span>
                 <select value={sex} onChange={(e) => setSex(e.target.value)} className={inputCls}>
@@ -140,8 +177,9 @@ export default function PatientSettingsPage() {
               <span className="text-sm font-medium text-patient-ink">Preferred language</span>
               <select value={lang} onChange={(e) => setLang(e.target.value)} className={inputCls}>
                 {AVAILABLE_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
+                  <option key={l.code} value={l.code} disabled={!isLanguageEnabled(l.code)}>
                     {l.label} · {l.nativeLabel}
+                    {isLanguageEnabled(l.code) ? '' : ' (coming soon)'}
                   </option>
                 ))}
               </select>
@@ -182,20 +220,40 @@ export default function PatientSettingsPage() {
                 </button>
               </div>
             ))}
-            {otherClinics.length > 0 && (
-              <div className="pt-2 border-t border-patient-border space-y-2">
-                <p className="mono-tag text-patient-muted text-[10px]">ADD A CLINIC</p>
-                {otherClinics.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => addFav.mutate(c.id)}
-                    className="flex items-center gap-2 text-sm text-patient-accent font-semibold hover:underline"
+            <div className="pt-3 border-t border-patient-border space-y-2">
+              <p className="mono-tag text-patient-muted text-[10px]">ADD A CLINIC</p>
+              {otherClinics.length > 0 ? (
+                <div className="flex gap-2">
+                  <select
+                    value={addSel}
+                    onChange={(e) => setAddSel(e.target.value)}
+                    className={inputCls}
+                    aria-label="Choose a clinic to add"
                   >
-                    <Plus className="w-4 h-4" /> {c.name}
+                    <option value="">Choose a clinic…</option>
+                    {otherClinics.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      if (addSel) {
+                        addFav.mutate(addSel);
+                        setAddSel('');
+                      }
+                    }}
+                    disabled={!addSel}
+                    className="shrink-0 h-12 px-4 rounded-xl bg-patient-accent text-white font-semibold flex items-center gap-1.5 disabled:opacity-40"
+                  >
+                    <Plus className="w-4 h-4" /> Add
                   </button>
-                ))}
-              </div>
-            )}
+                </div>
+              ) : (
+                <p className="text-sm text-patient-muted">
+                  All available clinics are already in your favourites.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -210,21 +268,10 @@ export default function PatientSettingsPage() {
               <BadgeCheck className="w-4 h-4" /> Health ID (ABHA)
             </button>
             <button
-              onClick={async () => {
-                const res = await fetch('/api/my-record');
-                if (!res.ok) return;
-                const data = await res.json();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'my-vaid-record.json';
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={() => void downloadRecordPdf()}
               className="flex items-center gap-2 text-sm font-semibold text-patient-ink hover:text-patient-accent"
             >
-              <Download className="w-4 h-4" /> Download my record
+              <Download className="w-4 h-4" /> Download my record (PDF)
             </button>
             <button
               onClick={async () => {

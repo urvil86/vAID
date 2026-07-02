@@ -7,7 +7,13 @@ import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth-client';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY, getStrings } from '@/lib/i18n';
+import {
+  AVAILABLE_LANGUAGES,
+  LANG_STORAGE_KEY,
+  PHONE_STORAGE_KEY,
+  isLanguageEnabled,
+  getStrings,
+} from '@/lib/i18n';
 
 // Testing-phase auth bypass — see src/lib/dev-auth.ts. Off when the env var is unset.
 const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1';
@@ -22,6 +28,10 @@ export default function PatientCheckInPage() {
   const { data: session } = authClient.useSession();
 
   useEffect(() => {
+    // Remembered phone from a previous visit — no need to retype it.
+    const savedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+    if (savedPhone) setPhone(savedPhone);
+
     const saved = localStorage.getItem(LANG_STORAGE_KEY);
     if (saved) {
       setLanguage(saved);
@@ -53,14 +63,17 @@ export default function PatientCheckInPage() {
   });
 
   const selectLang = (lang: string) => {
+    if (!isLanguageEnabled(lang)) return; // disabled languages are not selectable
     setLanguage(lang);
     localStorage.setItem(LANG_STORAGE_KEY, lang);
   };
 
   const handleStart = () => {
     localStorage.setItem(LANG_STORAGE_KEY, language);
-    // Capture phone on the profile (best-effort; OTP verification is paused).
+    // Capture phone on the profile (best-effort; OTP verification is paused) and
+    // remember it locally so future check-ins prefill it.
     const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 10) localStorage.setItem(PHONE_STORAGE_KEY, phone);
     if (digits.length >= 10) {
       fetch('/api/profile', {
         method: 'PUT',
@@ -105,17 +118,23 @@ export default function PatientCheckInPage() {
           <div className="flex flex-wrap gap-2">
             {shown.map((l) => {
               const selected = language === l.code;
+              const enabled = isLanguageEnabled(l.code);
               return (
                 <button
                   key={l.code}
                   onClick={() => selectLang(l.code)}
-                  className={`px-4 py-2 rounded-full text-base font-semibold border transition-colors ${
-                    selected
-                      ? 'bg-patient-ink text-white border-patient-ink'
-                      : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/60'
+                  disabled={!enabled}
+                  title={enabled ? undefined : 'Coming soon'}
+                  className={`px-4 py-2 rounded-full text-base font-semibold border transition-colors flex items-center gap-1.5 ${
+                    !enabled
+                      ? 'bg-transparent text-patient-muted/40 border-patient-border/60 cursor-not-allowed'
+                      : selected
+                        ? 'bg-patient-ink text-white border-patient-ink'
+                        : 'bg-transparent text-patient-ink border-patient-border hover:border-patient-accent/60'
                   }`}
                 >
                   {l.nativeLabel}
+                  {!enabled && <span className="mono-tag text-[8px]">soon</span>}
                 </button>
               );
             })}

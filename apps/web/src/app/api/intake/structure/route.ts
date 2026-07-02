@@ -186,27 +186,37 @@ export async function POST(request: Request) {
 
   // Cap AI structuring: per session (20/hr) is the real per-patient guard; the
   // per-IP backstop is 600/hr, not 60, because a whole clinic shares one public
-  // IP and would otherwise throttle legitimate patients.
-  const ipLimit = await enforceRateLimit(request, {
-    key: `ai:ip:${getClientIp(request)}`,
-    windowMs: 3_600_000,
-    max: 600,
-    route: '/api/intake/structure',
-    keyType: 'ip',
-    actorId: ctx.userId,
-  });
-  if (ipLimit) return ipLimit;
-  const sessionLimit = await enforceRateLimit(request, {
-    key: `ai:session:${sessionId}`,
-    windowMs: 3_600_000,
-    max: 20,
-    route: '/api/intake/structure',
-    keyType: 'visit',
-    actorId: ctx.userId,
-  });
-  if (sessionLimit) return sessionLimit;
+  // IP and would otherwise throttle legitimate patients. Rate limiting and audit
+  // are best-effort: if their backing tables are unavailable, we must NOT fail
+  // the patient's pre-read over a peripheral write.
+  try {
+    const ipLimit = await enforceRateLimit(request, {
+      key: `ai:ip:${getClientIp(request)}`,
+      windowMs: 3_600_000,
+      max: 600,
+      route: '/api/intake/structure',
+      keyType: 'ip',
+      actorId: ctx.userId,
+    });
+    if (ipLimit) return ipLimit;
+    const sessionLimit = await enforceRateLimit(request, {
+      key: `ai:session:${sessionId}`,
+      windowMs: 3_600_000,
+      max: 20,
+      route: '/api/intake/structure',
+      keyType: 'visit',
+      actorId: ctx.userId,
+    });
+    if (sessionLimit) return sessionLimit;
+  } catch (e) {
+    console.warn('[structure] rate-limit check skipped:', e);
+  }
 
-  await audit(request, ctx, 'structure', 'intake', sessionId);
+  try {
+    await audit(request, ctx, 'structure', 'intake', sessionId);
+  } catch (e) {
+    console.warn('[structure] audit write skipped:', e);
+  }
 
   try {
     const [session] = await sql`
@@ -224,16 +234,30 @@ export async function POST(request: Request) {
     // (never blocks intake; the admin dashboard shows a banner).
     const [vrow] = await sql`SELECT clinic_id FROM visits WHERE id = ${session.visit_id}`;
     const clinicId = (vrow?.clinic_id as string) || null;
-    const budgetExceeded = await overDailyBudget(clinicId);
+    let budgetExceeded = false;
+    try {
+      budgetExceeded = await overDailyBudget(clinicId);
+    } catch (e) {
+      console.warn('[structure] budget check skipped:', e);
+    }
 
     // De-identify before ANY third-party call (3.6): no name/phone/ABHA leaves
     // the platform. The local tier + grounding use the raw in-house transcript.
-    const [ident] = await sql`
-      SELECT u.name, u."phoneNumber" AS phone, pp.abha_id AS abha
-      FROM visits v JOIN "user" u ON u.id = v.patient_id
-      LEFT JOIN patient_profiles pp ON pp.user_id = u.id
-      WHERE v.id = ${session.visit_id}
-    `;
+    // If we cannot resolve identity, we force the local tier so nothing
+    // un-scrubbed can reach a third party.
+    let ident: { name?: string; phone?: string; abha?: string } | undefined;
+    let identityKnown = true;
+    try {
+      [ident] = await sql`
+        SELECT u.name, u."phoneNumber" AS phone, pp.abha_id AS abha
+        FROM visits v JOIN "user" u ON u.id = v.patient_id
+        LEFT JOIN patient_profiles pp ON pp.user_id = u.id
+        WHERE v.id = ${session.visit_id}
+      `;
+    } catch (e) {
+      console.warn('[structure] identity lookup failed; forcing local tier:', e);
+      identityKnown = false;
+    }
     const safeTranscript = deidentify(transcript, {
       name: ident?.name as string,
       phone: ident?.phone as string,
@@ -255,7 +279,7 @@ export async function POST(request: Request) {
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error('structuring timeout')), ms)),
       ]);
 
-    if (!thirdPartyDisabled && !budgetExceeded) {
+    if (!thirdPartyDisabled && !budgetExceeded && identityKnown) {
       const tiers = [
         ['openrouter', () => structureViaOpenRouter(safeTranscript, language)],
         ['platform', () => structureViaPlatform(safeTranscript)],
@@ -288,28 +312,54 @@ export async function POST(request: Request) {
 
     // Record AI spend for the clinic's daily budget (rough per-call estimate).
     if (structuringSource !== 'local') {
-      await recordAiSpend(clinicId, 0.002);
+      try {
+        await recordAiSpend(clinicId, 0.002);
+      } catch (e) {
+        console.warn('[structure] AI spend not recorded:', e);
+      }
     }
 
     // Grounding: FLAG (never delete) any medication/allergy not traceable to the
     // transcript, so the doctor must confirm it before signing (1.4 sign flow).
     structuredNote = applyGrounding(structuredNote, transcript);
 
-    // Persist the typed flag columns too (not just inside the JSON note), so the
-    // queue's screen-flag glyph and any flag-driven queries work off real data.
-    await sql`
-      UPDATE intake_sessions
-      SET structured_note_json = ${structuredNote},
-          transcript_english = ${structuredNote.history_of_present_illness},
-          screen_flags_json = ${JSON.stringify(structuredNote.screen_flags ?? [])},
-          confidence_flags_json = ${JSON.stringify(structuredNote.confidence_flags ?? [])},
-          note_status = 'ai_draft',
-          structuring_source = ${structuringSource},
-          structuring_status = ${structuringStatus}
-      WHERE id = ${sessionId} AND signed_at IS NULL
-    `;
+    // Essential save first — just the note JSON, on columns that have existed
+    // since the table was created. This is what the review screen needs, so it
+    // must succeed even on a database that predates the note-lifecycle columns.
+    try {
+      await sql`
+        UPDATE intake_sessions
+        SET structured_note_json = ${structuredNote},
+            transcript_english = ${structuredNote.history_of_present_illness}
+        WHERE id = ${sessionId}
+      `;
+    } catch (e) {
+      // Persistence failed, but still return the note so the patient isn't
+      // trapped — their review edits are re-saved via PUT on confirm.
+      console.error('[structure] essential note save failed:', e);
+    }
+
+    // Extended metadata (flags, provenance, lifecycle status) — best-effort.
+    // A DB missing these newer columns must not fail the whole request.
+    try {
+      await sql`
+        UPDATE intake_sessions
+        SET screen_flags_json = ${JSON.stringify(structuredNote.screen_flags ?? [])},
+            confidence_flags_json = ${JSON.stringify(structuredNote.confidence_flags ?? [])},
+            note_status = 'ai_draft',
+            structuring_source = ${structuringSource},
+            structuring_status = ${structuringStatus}
+        WHERE id = ${sessionId} AND signed_at IS NULL
+      `;
+    } catch (e) {
+      console.warn('[structure] extended note columns not updated (schema may be behind):', e);
+    }
     // Version 1 = the AI draft baseline (used for the doctor-edit diff).
-    await writeNoteVersion(sessionId, structuredNote, null, 'AI draft');
+    try {
+      await writeNoteVersion(sessionId, structuredNote, null, 'AI draft');
+    } catch (e) {
+      console.warn('[structure] note version not written:', e);
+    }
 
     return Response.json(structuredNote);
   } catch (error) {

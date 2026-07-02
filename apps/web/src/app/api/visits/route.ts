@@ -14,10 +14,10 @@ export async function POST(request: Request) {
   const ctx = await requireUser(request);
   if (ctx instanceof Response) return ctx;
 
-  const { clinicId, patientId: rawPatientId, tokenNo } = await request.json();
+  const { clinicId, patientId: rawPatientId } = await request.json();
   const patientId = await resolveDevPatientId(rawPatientId);
 
-  if (!clinicId || !patientId || !tokenNo) {
+  if (!clinicId || !patientId) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -31,9 +31,25 @@ export async function POST(request: Request) {
   }
 
   try {
+    // The token is a REAL sequential queue number, assigned server-side per
+    // clinic per calendar day (IST) — not a client-supplied placeholder. The
+    // next number is computed inside the INSERT; at pilot volumes the tiny race
+    // window between two simultaneous check-ins is acceptable (at worst a
+    // duplicate token, never a crash) and both land adjacent in the queue.
     const [visit] = await sql`
       INSERT INTO visits (patient_id, clinic_id, token_no, status)
-      VALUES (${patientId}, ${clinicId}, ${tokenNo}, 'CHECKED IN')
+      VALUES (
+        ${patientId},
+        ${clinicId},
+        (
+          SELECT COALESCE(COUNT(*), 0) + 1
+          FROM visits
+          WHERE clinic_id = ${clinicId}
+            AND (created_at AT TIME ZONE 'Asia/Kolkata')::date
+                = (now() AT TIME ZONE 'Asia/Kolkata')::date
+        )::text,
+        'CHECKED IN'
+      )
       RETURNING *
     `;
 

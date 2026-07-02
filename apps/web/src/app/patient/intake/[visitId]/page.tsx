@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import PatientLayout from '@/components/PatientLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Mic, RotateCcw, Loader2, WifiOff, Keyboard, Sparkles } from 'lucide-react';
+import { Mic, RotateCcw, Loader2, WifiOff, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getStrings, LANG_STORAGE_KEY } from '@/lib/i18n';
@@ -47,18 +47,10 @@ export default function PatientIntakePage() {
   const [saveError, setSaveError] = useState('');
   const [voiceError, setVoiceError] = useState('');
 
-  // Adaptive follow-up state (one clarifying question per step, max).
-  const [followupQuestion, setFollowupQuestion] = useState<string | null>(null);
-  const [followupInput, setFollowupInput] = useState('');
-  const [followupAsked, setFollowupAsked] = useState<Record<number, boolean>>({});
-  const [followupLoading, setFollowupLoading] = useState(false);
-
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef('');
-
-  const inFollowup = followupQuestion !== null;
 
   // ── Bootstrap: load language + restore saved progress ─────────────────────
   useEffect(() => {
@@ -140,7 +132,7 @@ export default function PatientIntakePage() {
     if (inputMode === 'type') {
       setTimeout(() => textAreaRef.current?.focus(), 100);
     }
-  }, [inputMode, currentStep, followupQuestion]);
+  }, [inputMode, currentStep]);
 
   const s = getStrings(language);
   // Questions are translated into the patient's language on the fly (Hindi and
@@ -162,16 +154,12 @@ export default function PatientIntakePage() {
   const question = questions[currentStep];
   const isHindi = language === 'Hindi';
 
-  // The "active" answer is the follow-up answer when a follow-up is showing,
-  // otherwise the main answer for this step.
   const currentAnswer = answers[currentStep];
-  const activeAnswer = inFollowup ? followupInput : currentAnswer;
-  const headingText = inFollowup ? (followupQuestion as string) : question.text;
+  const activeAnswer = currentAnswer;
+  const headingText = question.text;
 
-  // Route a committed value to the right slot (follow-up vs main answer).
   const commitAnswer = (value: string) => {
-    if (inFollowup) setFollowupInput(value);
-    else setAnswers((prev) => ({ ...prev, [currentStep]: value }));
+    setAnswers((prev) => ({ ...prev, [currentStep]: value }));
   };
 
   // ── Voice recording (Web Speech API) ──────────────────────────────────────
@@ -243,19 +231,15 @@ export default function PatientIntakePage() {
   };
 
   const clearAnswer = () => {
-    if (inFollowup) {
-      setFollowupInput('');
-    } else {
-      const next = { ...answers };
-      delete next[currentStep];
-      setAnswers(next);
-    }
+    const next = { ...answers };
+    delete next[currentStep];
+    setAnswers(next);
     setTypedAnswer('');
     setCurrentTranscript('');
     finalTranscriptRef.current = '';
   };
 
-  // ── Advance / submit (shared by both phases) ──────────────────────────────
+  // ── Advance / submit ──────────────────────────────────────────────────────
   const proceed = async (workingAnswers: Record<number, string>) => {
     // Best-effort partial autosave to the server so intake survives a lost tab /
     // cleared localStorage. The FINAL submit (below) is blocking + surfaces errors.
@@ -327,19 +311,16 @@ export default function PatientIntakePage() {
     // Commit a pending typed answer in one step (no separate Confirm tap).
     const pendingTyped = inputMode === 'type' ? typedAnswer.trim() : '';
     let mainAnswer = currentAnswer || '';
-    let followupAns = followupInput || '';
     if (pendingTyped) {
-      if (inFollowup) followupAns = pendingTyped;
-      else mainAnswer = pendingTyped;
+      mainAnswer = pendingTyped;
       commitAnswer(pendingTyped);
     }
     setTypedAnswer('');
     setCurrentTranscript('');
     finalTranscriptRef.current = '';
 
-    // Require an answer or an explicit skip on the MAIN question (Phase A) — an
-    // empty answer is never silently accepted.
-    if (!inFollowup && !mainAnswer.trim()) {
+    // An empty answer is never silently accepted — answer or explicit skip.
+    if (!mainAnswer.trim()) {
       setSaveError(
         isHindi
           ? 'कृपया उत्तर दें, या "बताना नहीं चाहते" चुनें।'
@@ -349,61 +330,8 @@ export default function PatientIntakePage() {
     }
     setSaveError('');
 
-    // Phase B: a follow-up was showing — fold its answer into the step, advance.
-    if (inFollowup) {
-      const combined = followupAns
-        ? `${mainAnswer}\n${followupQuestion} ${followupAns}`.trim()
-        : mainAnswer;
-      const updated = { ...answers, [currentStep]: combined };
-      setAnswers(updated);
-      setFollowupQuestion(null);
-      setFollowupInput('');
-      await proceed(updated);
-      return;
-    }
-
-    // Phase A: maybe ask one adaptive follow-up before advancing.
     const stepAnswers = { ...answers, [currentStep]: mainAnswer };
     setAnswers(stepAnswers);
-
-    if (isOnline && mainAnswer && !followupAsked[currentStep]) {
-      setFollowupLoading(true);
-      // One automatic retry with a short backoff; on final failure we proceed
-      // WITHOUT a follow-up rather than silently hanging or losing the answer.
-      const askFollowup = async (attempt = 0): Promise<Response | null> => {
-        try {
-          const r = await fetch('/api/intake/followup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ language, question: question.text, answer: mainAnswer }),
-          });
-          if (r.ok) return r;
-          throw new Error(`status ${r.status}`);
-        } catch {
-          if (attempt < 1) {
-            await new Promise((res) => setTimeout(res, 400));
-            return askFollowup(attempt + 1);
-          }
-          return null;
-        }
-      };
-      const r = await askFollowup();
-      if (r) {
-        const j = await r.json();
-        setFollowupAsked((prev) => ({ ...prev, [currentStep]: true }));
-        if (j.followup) {
-          setFollowupQuestion(j.followup);
-          setFollowupInput('');
-          setFollowupLoading(false);
-          return; // stay on this step to collect the follow-up answer
-        }
-      } else {
-        // Final failure — proceed without a follow-up (logged for analytics).
-        console.warn('[Intake] follow-up generation failed after retry; proceeding');
-      }
-      setFollowupLoading(false);
-    }
-
     await proceed(stepAnswers);
   };
 
@@ -414,21 +342,13 @@ export default function PatientIntakePage() {
     setCurrentTranscript('');
     finalTranscriptRef.current = '';
     setSaveError('');
-    if (inFollowup) {
-      const updated = { ...answers, [currentStep]: (answers[currentStep] || '').trim() };
-      setAnswers(updated);
-      setFollowupQuestion(null);
-      setFollowupInput('');
-      await proceed(updated);
-      return;
-    }
     const skipVal = isHindi ? 'बताना नहीं चाहते' : 'Prefer not to say';
     const stepAnswers = { ...answers, [currentStep]: skipVal };
     setAnswers(stepAnswers);
     await proceed(stepAnswers);
   };
 
-  const busy = loading || followupLoading;
+  const busy = loading;
   const canProceed =
     !isRecording &&
     !busy &&
@@ -486,27 +406,22 @@ export default function PatientIntakePage() {
           <div className="flex-1 min-w-0">
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${currentStep}-${inFollowup ? 'fu' : 'q'}`}
+              key={currentStep}
               initial={{ opacity: 0, x: 24 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -24 }}
               transition={{ duration: 0.18 }}
               className="space-y-5"
             >
-              {/* Question (or adaptive follow-up) */}
+              {/* Question */}
               <div className="space-y-1.5">
-                {inFollowup ? (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-patient-accent/40 text-patient-accent mono-tag text-[10px]">
-                    <Sparkles className="w-3 h-3" /> {isHindi ? 'AI · एक छोटा सवाल' : 'AI · ONE SMALL QUESTION'}
-                  </span>
-                ) : (
-                  language !== 'English' &&
-                  question.hint && <p className="mono-tag text-patient-muted text-[10px]">{question.hint}</p>
+                {language !== 'English' && question.hint && (
+                  <p className="mono-tag text-patient-muted text-[10px]">{question.hint}</p>
                 )}
                 <h2 className={`text-2xl font-bold leading-snug ${isHindi ? 'hindi' : ''}`}>
                   {headingText}
                 </h2>
-                {!inFollowup && language === 'English' && question.hint && (
+                {language === 'English' && question.hint && (
                   <p className="text-patient-muted text-base">{question.hint}</p>
                 )}
               </div>
@@ -654,7 +569,7 @@ export default function PatientIntakePage() {
                 >
                   {busy ? (
                     <Loader2 className="w-5 h-5" />
-                  ) : currentStep === questions.length - 1 && !inFollowup ? (
+                  ) : currentStep === questions.length - 1 ? (
                     s.finish
                   ) : (
                     s.next
@@ -665,7 +580,7 @@ export default function PatientIntakePage() {
           </AnimatePresence>
 
           {/* Explicit skip so an empty answer is a recorded choice, not missing data */}
-          {!busy && !inFollowup && !followupLoading && (
+          {!busy && (
             <button
               onClick={() => void skipAnswer()}
               className={`w-full text-center text-sm text-patient-muted underline mt-3 ${isHindi ? 'hindi' : ''}`}

@@ -19,7 +19,7 @@ import { type FormEvent, Suspense, useState } from 'react';
 import { Stethoscope, Mail, Lock, User, Eye, EyeOff, Loader2, Languages } from 'lucide-react';
 import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { authClient } from '@/lib/auth-client';
-import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY } from '@/lib/i18n';
+import { AVAILABLE_LANGUAGES, LANG_STORAGE_KEY, isLanguageEnabled } from '@/lib/i18n';
 
 function friendlyError(message?: string | null): string | null {
   if (!message) return null;
@@ -125,8 +125,9 @@ function SignUpForm() {
                 className="w-full rounded-xl border border-patient-border bg-white pl-10 pr-3 h-12 text-[16px] text-patient-ink outline-none focus:border-patient-accent transition-colors appearance-none"
               >
                 {AVAILABLE_LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
+                  <option key={l.code} value={l.code} disabled={!isLanguageEnabled(l.code)}>
                     {l.label} · {l.nativeLabel}
+                    {isLanguageEnabled(l.code) ? '' : ' (coming soon)'}
                   </option>
                 ))}
               </select>
