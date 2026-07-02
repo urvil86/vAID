@@ -1,15 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Printer, Share2, MessageCircle, Smartphone } from 'lucide-react';
+import { Loader2, Printer, Share2, MessageCircle, Smartphone, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PrescriptionItem } from '@/lib/types';
 
 export default function PrescriptionPrintPage() {
   const params = useParams();
+  const router = useRouter();
   const prescriptionId = params.prescriptionId as string;
+
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+    else router.push('/clinic/queue');
+  };
   const [today, setToday] = useState('');
   const [followUpFormatted, setFollowUpFormatted] = useState('');
   const [shareNotice, setShareNotice] = useState('');
@@ -101,6 +107,9 @@ export default function PrescriptionPrintPage() {
       {/* Controls - hidden on print */}
       <div className="no-print py-4 bg-gray-100">
         <div className="flex flex-wrap gap-3 justify-center">
+          <Button variant="outline" onClick={goBack} className="gap-2">
+            <ChevronLeft className="w-4 h-4" /> Back
+          </Button>
           <Button onClick={() => window.print()} className="bg-[#0c0e11] text-white gap-2">
             <Printer className="w-4 h-4" /> Print
           </Button>

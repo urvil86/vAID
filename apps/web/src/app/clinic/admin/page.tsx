@@ -162,7 +162,7 @@ export default function ClinicAdminPage() {
 
   if (!clinic) {
     return (
-      <ClinicLayout>
+      <ClinicLayout showBack={false}>
         <div className="flex h-[60vh] items-center justify-center">
           <Loader2 className="animate-spin text-doctor-accent" />
         </div>
@@ -174,7 +174,7 @@ export default function ClinicAdminPage() {
     'bg-doctor-bg border-doctor-muted/20 text-doctor-text placeholder:text-doctor-muted text-sm';
 
   return (
-    <ClinicLayout>
+    <ClinicLayout showBack={false}>
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Admin</h1>
         <p className="text-doctor-muted mono-tag mt-1">Clinic settings &amp; staff</p>

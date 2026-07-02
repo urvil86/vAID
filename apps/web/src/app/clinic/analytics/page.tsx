@@ -37,7 +37,7 @@ export default function ClinicAnalyticsPage() {
 
   if (isLoading || !data) {
     return (
-      <ClinicLayout>
+      <ClinicLayout showBack={false}>
         <div className="flex h-[60vh] items-center justify-center">
           <Loader2 className="animate-spin text-doctor-accent" />
         </div>
@@ -48,7 +48,7 @@ export default function ClinicAnalyticsPage() {
   const fmtMin = (m: number | null) => (m == null ? '—' : `${m} min`);
 
   return (
-    <ClinicLayout>
+    <ClinicLayout showBack={false}>
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Analytics</h1>
         <p className="text-doctor-muted mono-tag mt-1">{clinics?.[0]?.name}</p>

@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ListChecks, BarChart3, Settings, Loader2, LogOut } from 'lucide-react';
+import { ListChecks, BarChart3, Settings, Loader2, LogOut, ChevronLeft } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 
 const NAV = [
@@ -16,10 +16,31 @@ const STAFF_ROLES = ['doctor', 'receptionist', 'admin'];
 // reachable without a real login while testing.
 const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === '1';
 
-export default function ClinicLayout({ children }: { children: React.ReactNode }) {
+export default function ClinicLayout({
+  children,
+  showBack = true,
+  backHref,
+}: {
+  children: React.ReactNode;
+  /** Show the header back arrow. Off for the top-level nav pages (queue/analytics/admin). */
+  showBack?: boolean;
+  /** Force a specific back target instead of popping browser history. */
+  backHref?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+
+  const handleBack = () => {
+    if (backHref) {
+      router.push(backHref);
+      return;
+    }
+    // Pop history when possible, else fall back to the queue (clinic home) so a
+    // directly-opened drill-down never dead-ends.
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+    else router.push('/clinic/queue');
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const role = (session?.user as any)?.role as string | undefined;
@@ -49,13 +70,25 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-doctor-bg text-doctor-text selection:bg-doctor-accent/20">
       <header className="border-b border-doctor-muted/15 bg-doctor-bg/80 backdrop-blur sticky top-0 z-20">
         <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
-          <button
-            onClick={() => router.push('/clinic/queue')}
-            className="flex items-center gap-2 font-bold tracking-tight"
-          >
-            <span className="text-doctor-accent">V-Aid</span>
-            <span className="mono-tag text-[10px] text-doctor-muted">CLINIC CONSOLE</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            {showBack && (
+              <button
+                onClick={handleBack}
+                className="-ml-1.5 p-1 text-doctor-muted hover:text-doctor-text"
+                title="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                <span className="sr-only">Back</span>
+              </button>
+            )}
+            <button
+              onClick={() => router.push('/clinic/queue')}
+              className="flex items-center gap-2 font-bold tracking-tight"
+            >
+              <span className="text-doctor-accent">V-Aid</span>
+              <span className="mono-tag text-[10px] text-doctor-muted">CLINIC CONSOLE</span>
+            </button>
+          </div>
           <nav className="flex items-center gap-1">
             {NAV.map(({ href, label, icon: Icon }) => {
               const active = pathname?.startsWith(href);

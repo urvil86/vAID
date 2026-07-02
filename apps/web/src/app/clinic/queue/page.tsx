@@ -34,7 +34,7 @@ export default function ClinicQueuePage() {
 
   if (isLoading) {
     return (
-      <ClinicLayout>
+      <ClinicLayout showBack={false}>
         <div className="flex h-screen items-center justify-center">
           <Loader2 className="animate-spin text-doctor-accent" />
         </div>
@@ -45,7 +45,7 @@ export default function ClinicQueuePage() {
   const waitingCount = visits?.filter((v: any) => v.status !== 'DONE').length || 0;
 
   return (
-    <ClinicLayout>
+    <ClinicLayout showBack={false}>
       <div className="mb-8 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
